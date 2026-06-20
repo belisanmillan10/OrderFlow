@@ -54,6 +54,47 @@ router.get('/admin/orders', requireAdminAuth, async (req, res) => {
 });
 
 // ------------------------------------------------------------
+// PUT /api/admin/orders/:id/status - avanzar estado del pedido (SOLO ADMIN, de su local)
+router.put('/admin/orders/:id/status', requireAdminAuth, async (req, res) => {
+  const { id } = req.params;
+  const { status } = req.body;
+  const validStatuses = ['recibido', 'preparando', 'listo', 'entregado', 'cancelado'];
+  if (!validStatuses.includes(status)) {
+    return res.status(400).json({ error: 'Estado invalido' });
+  }
+  try {
+    const result = await pool.query(
+      'UPDATE orders SET status = $1 WHERE id = $2 AND local_id = $3 RETURNING *',
+      [status, id, req.admin.local_id]
+    );
+    if (result.rows.length === 0) return res.status(404).json({ error: 'Pedido no encontrado' });
+    res.json(result.rows[0]);
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'Error al actualizar estado' });
+  }
+});
+
+// ------------------------------------------------------------
+// GET /api/admin/orders/saturation - ocupacion de cocina del local del admin
+router.get('/admin/orders/saturation', requireAdminAuth, async (req, res) => {
+  try {
+    const result = await pool.query('SELECT max_capacity, used_capacity FROM time_slots WHERE local_id = $1', [req.admin.local_id]);
+    const totalMax = result.rows.reduce((s, r) => s + r.max_capacity, 0);
+    const totalUsed = result.rows.reduce((s, r) => s + r.used_capacity, 0);
+    const occupancyPct = totalMax > 0 ? Math.round((totalUsed / totalMax) * 100) : 0;
+    res.json({
+      occupancy_pct: occupancyPct,
+      estimated_wait_minutes: estimatedWaitMinutes(occupancyPct),
+      level: occupancyPct >= 85 ? 'red' : occupancyPct >= 60 ? 'yellow' : 'green',
+    });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'Error al calcular saturación' });
+  }
+});
+
+// ------------------------------------------------------------
 // POST /api/:slug/orders - crear un pedido nuevo PARA ESE LOCAL
 //
 // Flujo completo (todo dentro de una transaccion para evitar inconsistencias
@@ -292,47 +333,6 @@ router.get('/:slug/orders/code/:code', resolveLocal, async (req, res) => {
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: 'Error al consultar el pedido' });
-  }
-});
-
-// ------------------------------------------------------------
-// PUT /api/admin/orders/:id/status - avanzar estado del pedido (SOLO ADMIN, de su local)
-router.put('/admin/orders/:id/status', requireAdminAuth, async (req, res) => {
-  const { id } = req.params;
-  const { status } = req.body;
-  const validStatuses = ['recibido', 'preparando', 'listo', 'entregado', 'cancelado'];
-  if (!validStatuses.includes(status)) {
-    return res.status(400).json({ error: 'Estado invalido' });
-  }
-  try {
-    const result = await pool.query(
-      'UPDATE orders SET status = $1 WHERE id = $2 AND local_id = $3 RETURNING *',
-      [status, id, req.admin.local_id]
-    );
-    if (result.rows.length === 0) return res.status(404).json({ error: 'Pedido no encontrado' });
-    res.json(result.rows[0]);
-  } catch (err) {
-    console.error(err);
-    res.status(500).json({ error: 'Error al actualizar estado' });
-  }
-});
-
-// ------------------------------------------------------------
-// GET /api/admin/orders/saturation - ocupacion de cocina del local del admin
-router.get('/admin/orders/saturation', requireAdminAuth, async (req, res) => {
-  try {
-    const result = await pool.query('SELECT max_capacity, used_capacity FROM time_slots WHERE local_id = $1', [req.admin.local_id]);
-    const totalMax = result.rows.reduce((s, r) => s + r.max_capacity, 0);
-    const totalUsed = result.rows.reduce((s, r) => s + r.used_capacity, 0);
-    const occupancyPct = totalMax > 0 ? Math.round((totalUsed / totalMax) * 100) : 0;
-    res.json({
-      occupancy_pct: occupancyPct,
-      estimated_wait_minutes: estimatedWaitMinutes(occupancyPct),
-      level: occupancyPct >= 85 ? 'red' : occupancyPct >= 60 ? 'yellow' : 'green',
-    });
-  } catch (err) {
-    console.error(err);
-    res.status(500).json({ error: 'Error al calcular saturación' });
   }
 });
 

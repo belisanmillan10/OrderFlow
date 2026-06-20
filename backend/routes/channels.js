@@ -6,10 +6,8 @@ const router = express.Router();
 const pool = require('../db/pool');
 const { requireAdminAuth } = require('../middleware/auth');
 
-router.use(requireAdminAuth);
-
 // GET /api/admin/channels - canales del local del admin, con sus stats
-router.get('/admin/channels', async (req, res) => {
+router.get('/admin/channels', requireAdminAuth, async (req, res) => {
   try {
     const channelsRes = await pool.query('SELECT * FROM channels WHERE local_id = $1', [req.admin.local_id]);
     const channels = channelsRes.rows;
@@ -41,7 +39,7 @@ router.get('/admin/channels', async (req, res) => {
 });
 
 // PUT /api/admin/channels/:key - activar o pausar un canal (de su local)
-router.put('/admin/channels/:key', async (req, res) => {
+router.put('/admin/channels/:key', requireAdminAuth, async (req, res) => {
   const { key } = req.params;
   const { active } = req.body;
   try {
@@ -58,7 +56,7 @@ router.put('/admin/channels/:key', async (req, res) => {
 });
 
 // POST /api/admin/channels/:key/sync - simular sincronizacion
-router.post('/admin/channels/:key/sync', async (req, res) => {
+router.post('/admin/channels/:key/sync', requireAdminAuth, async (req, res) => {
   const { key } = req.params;
   try {
     const result = await pool.query(

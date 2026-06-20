@@ -5,19 +5,8 @@ const pool = require('../db/pool');
 const { requireAdminAuth } = require('../middleware/auth');
 const { resolveLocal } = require('../middleware/resolveLocal');
 
-// GET /api/:slug/slots - franjas del local (publico, lo usa el cliente)
-router.get('/:slug/slots', resolveLocal, async (req, res) => {
-  try {
-    const result = await pool.query(
-      'SELECT * FROM time_slots WHERE local_id = $1 ORDER BY start_time ASC',
-      [req.local.id]
-    );
-    res.json(result.rows);
-  } catch (err) {
-    console.error(err);
-    res.status(500).json({ error: 'Error al obtener franjas' });
-  }
-});
+// Rutas /admin/... van ANTES que /:slug/... para que "admin" nunca se
+// interprete por error como un slug de local (ver nota en products.js).
 
 // GET /api/admin/slots - franjas del local del admin
 router.get('/admin/slots', requireAdminAuth, async (req, res) => {
@@ -87,6 +76,20 @@ router.delete('/admin/slots/:id', requireAdminAuth, async (req, res) => {
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: 'Error al eliminar franja' });
+  }
+});
+
+// GET /api/:slug/slots - franjas del local (publico, lo usa el cliente). AL FINAL.
+router.get('/:slug/slots', resolveLocal, async (req, res) => {
+  try {
+    const result = await pool.query(
+      'SELECT * FROM time_slots WHERE local_id = $1 ORDER BY start_time ASC',
+      [req.local.id]
+    );
+    res.json(result.rows);
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'Error al obtener franjas' });
   }
 });
 

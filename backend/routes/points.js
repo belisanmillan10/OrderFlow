@@ -5,10 +5,8 @@ const pool = require('../db/pool');
 const { requireAdminAuth } = require('../middleware/auth');
 const { resolveLocal } = require('../middleware/resolveLocal');
 
-// GET /api/:slug/points/settings - tasa de acumulacion del local (publico)
-router.get('/:slug/points/settings', resolveLocal, async (req, res) => {
-  res.json({ points_rate: req.local.points_rate || 100 });
-});
+// Rutas /admin/... van ANTES que /:slug/... para que "admin" nunca se
+// interprete por error como un slug de local (ver nota en products.js).
 
 // PUT /api/admin/points/settings - cambiar tasa de acumulacion (SOLO ADMIN)
 router.put('/admin/points/settings', requireAdminAuth, async (req, res) => {
@@ -25,37 +23,6 @@ router.put('/admin/points/settings', requireAdminAuth, async (req, res) => {
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: 'Error al actualizar tasa de puntos' });
-  }
-});
-
-// GET /api/:slug/points/customer/:phone - puntos de un cliente de ESE local,
-// identificado por telefono (publico: lo consulta el cliente sobre si mismo)
-router.get('/:slug/points/customer/:phone', resolveLocal, async (req, res) => {
-  const { phone } = req.params;
-  try {
-    const result = await pool.query(
-      'SELECT * FROM customers WHERE local_id = $1 AND phone = $2 LIMIT 1',
-      [req.local.id, phone]
-    );
-    if (result.rows.length === 0) return res.json({ phone, points: 0, found: false });
-    res.json({ ...result.rows[0], found: true });
-  } catch (err) {
-    console.error(err);
-    res.status(500).json({ error: 'Error al buscar cliente' });
-  }
-});
-
-// GET /api/:slug/points/rewards - premios canjeables del local (publico)
-router.get('/:slug/points/rewards', resolveLocal, async (req, res) => {
-  try {
-    const result = await pool.query(
-      'SELECT * FROM rewards WHERE local_id = $1 ORDER BY points_cost ASC',
-      [req.local.id]
-    );
-    res.json(result.rows);
-  } catch (err) {
-    console.error(err);
-    res.status(500).json({ error: 'Error al obtener premios' });
   }
 });
 
@@ -122,6 +89,45 @@ router.delete('/admin/points/rewards/:id', requireAdminAuth, async (req, res) =>
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: 'Error al eliminar premio' });
+  }
+});
+
+// ------------------------------------------------------------
+// Rutas publicas (cliente), con slug. AL FINAL.
+
+// GET /api/:slug/points/settings - tasa de acumulacion del local (publico)
+router.get('/:slug/points/settings', resolveLocal, async (req, res) => {
+  res.json({ points_rate: req.local.points_rate || 100 });
+});
+
+// GET /api/:slug/points/customer/:phone - puntos de un cliente de ESE local,
+// identificado por telefono (publico: lo consulta el cliente sobre si mismo)
+router.get('/:slug/points/customer/:phone', resolveLocal, async (req, res) => {
+  const { phone } = req.params;
+  try {
+    const result = await pool.query(
+      'SELECT * FROM customers WHERE local_id = $1 AND phone = $2 LIMIT 1',
+      [req.local.id, phone]
+    );
+    if (result.rows.length === 0) return res.json({ phone, points: 0, found: false });
+    res.json({ ...result.rows[0], found: true });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'Error al buscar cliente' });
+  }
+});
+
+// GET /api/:slug/points/rewards - premios canjeables del local (publico)
+router.get('/:slug/points/rewards', resolveLocal, async (req, res) => {
+  try {
+    const result = await pool.query(
+      'SELECT * FROM rewards WHERE local_id = $1 ORDER BY points_cost ASC',
+      [req.local.id]
+    );
+    res.json(result.rows);
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'Error al obtener premios' });
   }
 });
 

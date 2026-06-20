@@ -8,24 +8,12 @@ const { resolveLocal } = require('../middleware/resolveLocal');
 const CAT_EMOJIS = { burgers: '🍔', combos: '🍱', bebidas: '🥤', extras: '🍟', postres: '🍦' };
 
 // ------------------------------------------------------------
-// RUTAS PUBLICAS (cliente), identificadas por slug en la URL
-// GET /api/:slug/products - lista productos de ESE local
-router.get('/:slug/products', resolveLocal, async (req, res) => {
-  try {
-    const result = await pool.query(
-      'SELECT * FROM products WHERE local_id = $1 ORDER BY id ASC',
-      [req.local.id]
-    );
-    res.json(result.rows);
-  } catch (err) {
-    console.error(err);
-    res.status(500).json({ error: 'Error al obtener productos' });
-  }
-});
+// RUTAS DE ADMIN primero: como ambos grupos de rutas tienen la misma
+// forma (/algo/products), si la ruta generica /:slug/products se
+// registrara primero, capturaria por error pedidos a /admin/products
+// (interpretando "admin" como si fuera el slug de un local). Por eso
+// las rutas literales especificas van ANTES que la generica con parametro.
 
-// ------------------------------------------------------------
-// RUTAS DE ADMIN, el local_id viene del token (no del request) para
-// que un admin nunca pueda tocar datos de otro local cambiando un parametro.
 // GET /api/admin/products - lista productos del local del admin logueado
 router.get('/admin/products', requireAdminAuth, async (req, res) => {
   try {
@@ -99,6 +87,24 @@ router.delete('/admin/products/:id', requireAdminAuth, async (req, res) => {
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: 'Error al eliminar producto' });
+  }
+});
+
+// ------------------------------------------------------------
+// RUTA PUBLICA (cliente), identificada por slug en la URL. Va AL FINAL
+// porque /:slug/products coincidiria con cualquier path de 2 segmentos,
+// incluyendo /admin/products si estuviera registrada antes.
+// GET /api/:slug/products - lista productos de ESE local
+router.get('/:slug/products', resolveLocal, async (req, res) => {
+  try {
+    const result = await pool.query(
+      'SELECT * FROM products WHERE local_id = $1 ORDER BY id ASC',
+      [req.local.id]
+    );
+    res.json(result.rows);
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'Error al obtener productos' });
   }
 });
 

@@ -5,14 +5,8 @@ const pool = require('../db/pool');
 const { requireAdminAuth } = require('../middleware/auth');
 const { resolveLocal } = require('../middleware/resolveLocal');
 
-// GET /api/:slug/settings - configuracion publica del local (lo necesita el cliente)
-router.get('/:slug/settings', resolveLocal, async (req, res) => {
-  res.json({
-    store_open: req.local.store_open,
-    points_rate: req.local.points_rate,
-    local_name: req.local.nombre,
-  });
-});
+// Rutas /admin/... van ANTES que /:slug/... para que "admin" nunca se
+// interprete por error como un slug de local (ver nota en products.js).
 
 // GET /api/admin/settings - configuracion del local del admin logueado
 router.get('/admin/settings', requireAdminAuth, async (req, res) => {
@@ -41,6 +35,15 @@ router.put('/admin/settings', requireAdminAuth, async (req, res) => {
     console.error(err);
     res.status(500).json({ error: 'Error al actualizar configuración' });
   }
+});
+
+// GET /api/:slug/settings - configuracion publica del local. AL FINAL.
+router.get('/:slug/settings', resolveLocal, async (req, res) => {
+  res.json({
+    store_open: req.local.store_open,
+    points_rate: req.local.points_rate,
+    local_name: req.local.nombre,
+  });
 });
 
 module.exports = router;

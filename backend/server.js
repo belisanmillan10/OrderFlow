@@ -31,6 +31,13 @@ const PORT = process.env.PORT || 3000;
 app.use(cors());
 app.use(express.json({ limit: '5mb' })); // 5mb por las imagenes en base64
 
+// Endpoint de salud: se registra ANTES de cualquier router, para que
+// nunca pueda quedar atrapado por un middleware de autenticacion de
+// algun router montado mas adelante.
+app.get('/api/health', (req, res) => {
+  res.json({ status: 'ok', time: new Date().toISOString() });
+});
+
 // ------------------------------------------------------------
 // Rutas de autenticacion de administrador (publica: hay que poder
 // hacer login sin estar todavia logueado).
@@ -50,11 +57,6 @@ app.use('/api', settingsRouter);
 
 // Metrics es exclusivamente de administrador, se protege a nivel de montaje.
 app.use('/api/metrics', requireAdminAuth, metricsRouter);
-
-// Endpoint de salud, util para chequear que el server esta vivo
-app.get('/api/health', (req, res) => {
-  res.json({ status: 'ok', time: new Date().toISOString() });
-});
 
 // ------------------------------------------------------------
 // Servir el frontend.

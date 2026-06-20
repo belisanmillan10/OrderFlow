@@ -5,23 +5,8 @@ const pool = require('../db/pool');
 const { requireAdminAuth } = require('../middleware/auth');
 const { resolveLocal } = require('../middleware/resolveLocal');
 
-// GET /api/:slug/promotions - promos activas del local (publico, banners del cliente)
-router.get('/:slug/promotions', resolveLocal, async (req, res) => {
-  try {
-    const result = await pool.query(
-      `SELECT p.*, s.start_time, s.end_time
-       FROM promotions p
-       LEFT JOIN time_slots s ON p.slot_id = s.id
-       WHERE p.local_id = $1
-       ORDER BY p.id ASC`,
-      [req.local.id]
-    );
-    res.json(result.rows);
-  } catch (err) {
-    console.error(err);
-    res.status(500).json({ error: 'Error al obtener promociones' });
-  }
-});
+// Rutas /admin/... van ANTES que /:slug/... para que "admin" nunca se
+// interprete por error como un slug de local (ver nota en products.js).
 
 // GET /api/admin/promotions - todas las promos del local del admin
 router.get('/admin/promotions', requireAdminAuth, async (req, res) => {
@@ -120,6 +105,24 @@ router.delete('/admin/promotions/:id', requireAdminAuth, async (req, res) => {
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: 'Error al eliminar promoción' });
+  }
+});
+
+// GET /api/:slug/promotions - promos activas del local (publico, banners del cliente)
+router.get('/:slug/promotions', resolveLocal, async (req, res) => {
+  try {
+    const result = await pool.query(
+      `SELECT p.*, s.start_time, s.end_time
+       FROM promotions p
+       LEFT JOIN time_slots s ON p.slot_id = s.id
+       WHERE p.local_id = $1
+       ORDER BY p.id ASC`,
+      [req.local.id]
+    );
+    res.json(result.rows);
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'Error al obtener promociones' });
   }
 });
 
