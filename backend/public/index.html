@@ -1,0 +1,819 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1.0,maximum-scale=1.0">
+<title>OrderFlow v3</title>
+<script src="https://cdn.jsdelivr.net/npm/qrcodejs@1.0.0/qrcode.min.js"></script>
+<style>
+
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=Space+Grotesk:wght@500;600;700&display=swap');
+:root{
+  --br:#E8420A;--brd:#B83208;--brl:#FDE8E0;
+  --dk:#1A1209;--g7:#3A3A3C;--g5:#8E8E93;--g3:#D1D1D6;--g1:#F2F2F7;
+  --wh:#fff;--ok:#34C759;--wa:#FF9F0A;--er:#FF3B30;--in:#007AFF;
+  --rap:#FF6700;--pdy:#E61C45;--pre:#6C5CE7;--web:#00B4D8;
+}
+*{margin:0;padding:0;box-sizing:border-box;-webkit-tap-highlight-color:transparent;}
+body{font-family:'Inter',sans-serif;background:var(--g1);min-height:100vh;font-size:14px;}
+input,select,textarea,button{font-family:'Inter',sans-serif;}
+.hidden{display:none!important;}
+.sg{font-family:'Space Grotesk',sans-serif;}
+.fxsb{display:flex;align-items:center;justify-content:space-between;}
+.badge{display:inline-block;padding:3px 9px;border-radius:20px;font-size:10px;font-weight:700;letter-spacing:.4px;text-transform:uppercase;}
+.b-ok{background:#E8F8EE;color:#1a7a3a;}.b-wa{background:#FFF5E0;color:#a06000;}
+.b-er{background:#FFEBEA;color:#c0392b;}.b-in{background:#E6F0FF;color:#1a4db3;}
+.b-gr{background:var(--g1);color:var(--g5);}.b-pu{background:#F0EEFF;color:#5b3cc4;}
+.b-rap{background:#FFF0E6;color:#c45000;}.b-pdy{background:#FCEAEE;color:#b01535;}
+.b-web{background:#E0F7FA;color:#00838F;}.b-pre{background:#EDE7F6;color:#4a1fb8;}
+
+/* LANDING */
+#land{min-height:100vh;background:var(--dk);display:flex;flex-direction:column;align-items:center;justify-content:center;padding:32px 20px;text-align:center;}
+.l-logo{font-size:56px;font-weight:700;color:#fff;line-height:1;margin-bottom:6px;font-family:'Space Grotesk',sans-serif;}
+.l-logo span{color:var(--br);}
+.l-sub{font-size:14px;color:rgba(255,255,255,.45);margin-bottom:28px;max-width:300px;line-height:1.6;}
+.l-qr{background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.11);border-radius:16px;padding:22px;margin-bottom:22px;width:100%;max-width:260px;}
+.l-qr-lbl{font-size:10px;letter-spacing:2px;text-transform:uppercase;color:rgba(255,255,255,.3);margin-bottom:11px;}
+#lqr{display:flex;justify-content:center;}
+.l-url{font-size:11px;color:rgba(255,255,255,.3);margin-top:9px;word-break:break-all;}
+.l-url span{color:#FFB49A;}
+.cp-btn{margin-top:7px;background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.13);color:rgba(255,255,255,.5);padding:5px 14px;border-radius:7px;font-size:11px;cursor:pointer;}
+.l-btns{display:flex;flex-direction:column;gap:9px;width:100%;max-width:260px;}
+.l-btn{padding:14px;border-radius:13px;border:none;font-size:13px;font-weight:600;cursor:pointer;}
+.l-btn-p{background:var(--br);color:#fff;}
+.l-btn-s{background:rgba(255,255,255,.07);color:rgba(255,255,255,.75);border:1.5px solid rgba(255,255,255,.14);}
+.l-btn-d{background:rgba(255,255,255,.03);color:rgba(255,255,255,.45);border:1.5px solid rgba(255,255,255,.09);}
+
+/* SHELL */
+#app{display:flex;flex-direction:column;min-height:100vh;}
+.topbar{background:var(--dk);padding:11px 15px;display:flex;align-items:center;justify-content:space-between;position:sticky;top:0;z-index:300;}
+.topbar-logo{font-size:18px;font-weight:700;color:#fff;font-family:'Space Grotesk',sans-serif;}
+.topbar-logo span{color:var(--br);}
+.tb-badge{background:var(--br);color:#fff;font-size:10px;font-weight:700;padding:3px 9px;border-radius:20px;}
+.tb-exit{background:rgba(255,255,255,.07);border:none;color:rgba(255,255,255,.5);padding:5px 10px;border-radius:7px;font-size:11px;cursor:pointer;}
+
+/* STATUS */
+.sbanner{padding:8px;text-align:center;font-size:12px;font-weight:600;color:#fff;}
+.sbanner.open{background:var(--ok);}.sbanner.closed{background:var(--wa);}
+
+/* CLIENT */
+.cscreens{flex:1;overflow-y:auto;}
+.cs{display:none;padding-bottom:70px;}.cs.active{display:block;}
+.sh{background:#fff;padding:12px 15px;display:flex;align-items:center;gap:9px;border-bottom:1px solid var(--g1);position:sticky;top:0;z-index:50;}
+.bk{width:33px;height:33px;border-radius:9px;background:var(--g1);border:none;font-size:16px;cursor:pointer;display:flex;align-items:center;justify-content:center;}
+.stitle{font-size:16px;font-weight:700;color:var(--dk);font-family:'Space Grotesk',sans-serif;}
+.catnav{background:#fff;display:flex;gap:7px;padding:9px 13px;overflow-x:auto;border-bottom:1px solid var(--g1);scrollbar-width:none;}
+.catnav::-webkit-scrollbar{display:none;}
+.cpill{padding:5px 13px;border-radius:20px;border:1.5px solid var(--g3);background:#fff;color:var(--g7);font-size:12px;font-weight:500;cursor:pointer;white-space:nowrap;}
+.cpill.active{background:var(--br);border-color:var(--br);color:#fff;}
+.mpad{padding:11px;}
+.pcard{background:#fff;border-radius:12px;display:flex;overflow:hidden;border:1px solid var(--g1);margin-bottom:8px;}
+.pimg{width:80px;min-width:80px;height:80px;background:var(--g1);display:flex;align-items:center;justify-content:center;font-size:32px;overflow:hidden;}
+.pimg img{width:80px;height:80px;object-fit:cover;}
+.pbody{flex:1;padding:10px 12px;display:flex;flex-direction:column;justify-content:space-between;}
+.pname{font-size:13px;font-weight:600;color:var(--dk);}
+.pdesc{font-size:11px;color:var(--g5);margin-top:1px;line-height:1.35;}
+.pfoot{display:flex;align-items:center;justify-content:space-between;margin-top:6px;}
+.pprice{font-size:14px;font-weight:700;color:var(--br);}
+.addbtn{width:29px;height:29px;border-radius:9px;background:var(--br);border:none;color:#fff;font-size:19px;cursor:pointer;display:flex;align-items:center;justify-content:center;}
+.utag{font-size:10px;font-weight:600;color:var(--er);background:#FFEBEA;padding:2px 7px;border-radius:5px;}
+.stktag{font-size:10px;color:var(--wa);margin-top:2px;}
+.prbanner{background:linear-gradient(135deg,#FF6B35,#E8420A);border-radius:12px;padding:12px 14px;margin:0 11px 9px;color:#fff;}
+.prb-lbl{font-size:9px;font-weight:700;letter-spacing:2px;text-transform:uppercase;opacity:.7;margin-bottom:2px;}
+.prb-t{font-size:15px;font-weight:700;margin-bottom:1px;}
+.prb-s{font-size:11px;opacity:.8;}
+
+/* SLOTS CLIENT */
+.slotgrid{display:grid;grid-template-columns:repeat(2,1fr);gap:7px;padding:11px;}
+.scard{background:#fff;border:2px solid var(--g3);border-radius:11px;padding:11px 9px;cursor:pointer;}
+.scard.sel{background:var(--brl);border-color:var(--br);}
+.scard.full,.scard.off{opacity:.4;pointer-events:none;}
+.scard.hi{border-color:var(--wa);background:#FFFBF0;}
+.sc-top{display:flex;justify-content:space-between;align-items:center;margin-bottom:4px;}
+.sc-t{font-size:13px;font-weight:700;color:var(--dk);}
+.scard.sel .sc-t{color:var(--br);}
+.sdem{font-size:9px;font-weight:600;padding:2px 6px;border-radius:9px;}
+.d-lo{background:#E8F8EE;color:#1a7a3a;}.d-md{background:#FFF5E0;color:#a06000;}
+.d-hi{background:#FFEBEA;color:#c0392b;}.d-fu{background:#EEE;color:#666;}
+.sc-av{font-size:10px;color:var(--g5);margin-top:1px;}
+.sc-eta{font-size:10px;color:var(--in);margin-top:2px;font-weight:500;}
+.sc-pr{font-size:10px;color:var(--br);font-weight:600;margin-top:2px;}
+.sc-rec{font-size:9px;color:var(--ok);font-weight:600;margin-top:2px;}
+
+/* CART BAR */
+.cartbar{position:sticky;bottom:54px;background:var(--dk);padding:10px 15px;display:none;align-items:center;justify-content:space-between;z-index:80;}
+.cartbar.vis{display:flex;}
+.cb-i span{font-size:10px;color:rgba(255,255,255,.45);display:block;}
+.cb-i strong{font-size:16px;font-weight:700;color:#fff;}
+.cb-btn{background:var(--br);color:#fff;border:none;padding:9px 19px;border-radius:10px;font-size:13px;font-weight:600;cursor:pointer;}
+.citem{background:#fff;border-radius:11px;padding:11px 13px;display:flex;align-items:center;gap:9px;border:1px solid var(--g1);margin:0 11px 7px;}
+.ci-em{font-size:24px;}.ci-img{width:38px;height:38px;border-radius:7px;object-fit:cover;}
+.ci-n{flex:1;}.ci-nm{font-size:12px;font-weight:600;color:var(--dk);}
+.ci-pr{font-size:11px;color:var(--br);font-weight:500;margin-top:1px;}
+.qw{display:flex;align-items:center;gap:6px;}
+.qb{width:25px;height:25px;border-radius:7px;background:var(--g1);border:none;font-size:14px;font-weight:600;cursor:pointer;display:flex;align-items:center;justify-content:center;}
+.qn{font-size:12px;font-weight:700;min-width:13px;text-align:center;}
+
+/* PAY */
+.pm{background:#fff;border:2px solid var(--g3);border-radius:12px;padding:13px;display:flex;align-items:center;gap:11px;margin:0 11px 8px;cursor:pointer;}
+.pm.sel{border-color:var(--br);background:var(--brl);}
+.pm-ic{font-size:24px;}.pm-lbl{font-size:13px;font-weight:600;color:var(--dk);}
+.pm-sb{font-size:10px;color:var(--g5);}
+.pm-ck{margin-left:auto;width:19px;height:19px;border-radius:50%;border:2px solid var(--g3);display:flex;align-items:center;justify-content:center;font-size:10px;}
+.pm.sel .pm-ck{background:var(--br);border-color:var(--br);color:#fff;}
+
+/* SUMMARY */
+.sumbox{background:var(--brl);border-radius:12px;padding:13px;margin:9px 11px;}
+.sr{display:flex;justify-content:space-between;align-items:center;padding:3px 0;font-size:12px;}
+.sl{color:var(--g7);}.sv{font-weight:600;color:var(--dk);}
+.sd{height:1px;background:rgba(232,66,10,.18);margin:5px 0;}
+.stot{font-size:16px;font-weight:700;color:var(--br);}
+.sdisc{color:var(--ok);font-weight:600;}
+
+/* BUTTONS */
+.abtn{width:calc(100% - 22px);margin:7px 11px;background:var(--br);color:#fff;border:none;padding:13px;border-radius:12px;font-size:14px;font-weight:600;cursor:pointer;}
+.abtn:disabled{opacity:.45;pointer-events:none;}
+.abtn.dk{background:var(--dk);}
+
+/* FORM */
+.fwrap{padding:11px;}
+.flbl{font-size:10px;font-weight:600;color:var(--g5);text-transform:uppercase;letter-spacing:1px;margin-bottom:5px;display:block;}
+.finp{width:100%;padding:11px 13px;background:#fff;border:1.5px solid var(--g3);border-radius:10px;font-size:13px;color:var(--dk);outline:none;margin-bottom:11px;}
+.finp:focus{border-color:var(--br);}
+.fsel{width:100%;padding:11px 13px;background:#fff;border:1.5px solid var(--g3);border-radius:10px;font-size:13px;color:var(--dk);outline:none;margin-bottom:11px;appearance:none;}
+
+/* CONFIRM */
+.confw{padding:26px 15px;text-align:center;}
+.conf-ic{font-size:60px;margin-bottom:9px;}
+.conf-t{font-size:22px;font-weight:700;color:var(--dk);margin-bottom:4px;font-family:'Space Grotesk',sans-serif;}
+.conf-s{font-size:12px;color:var(--g5);line-height:1.55;margin-bottom:18px;}
+.codebox{background:#fff;border:2px solid var(--g1);border-radius:13px;padding:14px;margin-bottom:12px;}
+.clbl{font-size:9px;letter-spacing:2px;text-transform:uppercase;color:var(--g5);margin-bottom:4px;}
+.cval{font-size:28px;font-weight:700;color:var(--br);letter-spacing:4px;font-family:'Space Grotesk',sans-serif;}
+.pkbox{background:var(--brl);border-radius:12px;padding:13px;margin-bottom:12px;text-align:left;}
+.pklbl{font-size:9px;letter-spacing:2px;text-transform:uppercase;color:var(--br);margin-bottom:3px;font-weight:700;}
+.pkt{font-size:16px;font-weight:700;color:var(--dk);}
+.pkm{font-size:11px;color:var(--g7);margin-top:2px;}
+.ptsbox{background:#E8F8EE;border-radius:12px;padding:11px;margin-bottom:12px;text-align:center;}
+.ptsbox span{font-size:18px;font-weight:700;color:#1a7a3a;}
+.ptsbox p{font-size:11px;color:#2d8a4e;margin-top:2px;}
+
+/* TRACKER */
+.trkr{padding:11px;}
+.tri{display:flex;align-items:flex-start;gap:11px;padding:11px 0;border-bottom:1px solid var(--g1);}
+.tri:last-child{border-bottom:none;}
+.trd{width:30px;height:30px;min-width:30px;border-radius:50%;border:3px solid var(--g3);display:flex;align-items:center;justify-content:center;font-size:12px;background:#fff;}
+.trd.done{background:var(--ok);border-color:var(--ok);color:#fff;}
+.trd.cur{background:var(--br);border-color:var(--br);animation:pulse 1.5s infinite;}
+@keyframes pulse{0%,100%{box-shadow:0 0 0 0 rgba(232,66,10,.3)}50%{box-shadow:0 0 0 7px rgba(232,66,10,0)}}
+.tri h4{font-size:13px;font-weight:600;color:var(--dk);}
+.tri p{font-size:11px;color:var(--g5);margin-top:1px;}
+
+/* POINTS */
+.ptshero{background:linear-gradient(135deg,var(--br),#b83208);padding:16px;margin:11px;border-radius:14px;color:#fff;}
+.ptsv{font-size:36px;font-weight:700;font-family:'Space Grotesk',sans-serif;}
+.ptslbl{font-size:11px;opacity:.65;margin-top:1px;}
+.rcard{background:#fff;border-radius:10px;padding:11px;margin:7px 11px;border:1px solid var(--g1);display:flex;align-items:center;gap:9px;}
+.rdpts{font-size:11px;font-weight:700;color:var(--br);}
+.rdbtn{margin-left:auto;background:var(--br);color:#fff;border:none;padding:6px 13px;border-radius:7px;font-size:11px;font-weight:600;cursor:pointer;white-space:nowrap;}
+.rdbtn.dis{background:var(--g3);cursor:not-allowed;}
+
+/* CLIENT NAV */
+.cnav{display:flex;background:#fff;border-top:1px solid var(--g1);position:sticky;bottom:0;z-index:100;}
+.cnbtn{flex:1;padding:8px 4px 6px;border:none;background:transparent;display:flex;flex-direction:column;align-items:center;gap:2px;cursor:pointer;color:var(--g5);font-size:9px;font-weight:500;}
+.cnbtn.active{color:var(--br);}
+.cnbtn .ni{font-size:18px;line-height:1;}
+
+/* ADMIN */
+.anav{display:flex;background:#fff;border-bottom:1px solid var(--g1);overflow-x:auto;scrollbar-width:none;}
+.anav::-webkit-scrollbar{display:none;}
+.anbtn{padding:11px 15px;white-space:nowrap;border:none;background:transparent;font-size:12px;font-weight:500;color:var(--g5);cursor:pointer;border-bottom:3px solid transparent;}
+.anbtn.active{color:var(--br);border-bottom-color:var(--br);font-weight:600;}
+.ascreens{padding:11px;padding-bottom:55px;}
+.as{display:none;}.as.active{display:block;}
+
+/* METRIC CARDS */
+.mgrid{display:grid;grid-template-columns:repeat(2,1fr);gap:8px;margin-bottom:11px;}
+.mc{background:#fff;border-radius:12px;padding:12px;border:1px solid var(--g1);}
+.mc-l{font-size:10px;color:var(--g5);text-transform:uppercase;letter-spacing:1px;margin-bottom:2px;}
+.mc-v{font-size:22px;font-weight:700;color:var(--dk);font-family:'Space Grotesk',sans-serif;}
+.mc-s{font-size:10px;color:var(--ok);margin-top:1px;}
+
+/* ALERTS */
+.alrt{border-radius:11px;padding:11px 13px;margin-bottom:7px;display:flex;align-items:flex-start;gap:9px;}
+.alrt-wa{background:#FFF5E0;border-left:4px solid var(--wa);}
+.alrt-er{background:#FFEBEA;border-left:4px solid var(--er);}
+.alrt-in{background:#E6F0FF;border-left:4px solid var(--in);}
+.alrt-ok{background:#E8F8EE;border-left:4px solid var(--ok);}
+.alrt-ic{font-size:16px;margin-top:1px;}
+.alrt-t{font-size:12px;font-weight:600;color:var(--dk);}
+.alrt-s{font-size:10px;color:var(--g5);margin-top:1px;}
+
+/* TOGGLE */
+.tog{width:48px;height:27px;border-radius:14px;background:var(--ok);cursor:pointer;position:relative;transition:background .25s;border:none;flex-shrink:0;}
+.tog::after{content:'';position:absolute;width:21px;height:21px;background:#fff;border-radius:50%;top:3px;left:3px;transition:transform .25s;box-shadow:0 1px 3px rgba(0,0,0,.2);}
+.tog.off{background:var(--g3);}.tog.off::after{transform:translateX(21px);}
+.pcrd{background:#fff;border-radius:12px;padding:12px 15px;display:flex;align-items:center;justify-content:space-between;border:1px solid var(--g1);margin-bottom:11px;}
+
+/* CHANNEL */
+.chchannel{background:#fff;border-radius:13px;padding:13px;margin-bottom:9px;border:1px solid var(--g1);}
+.chchannel.paused{opacity:.72;border-left:4px solid var(--wa);}
+.chh{display:flex;align-items:center;justify-content:space-between;margin-bottom:9px;}
+.chlogo{display:flex;align-items:center;gap:8px;}
+.chicon{width:36px;height:36px;border-radius:9px;display:flex;align-items:center;justify-content:center;font-size:18px;}
+.chicon.rappi{background:#FFF0E6;}.chicon.pedidosya{background:#FCEAEE;}
+.chicon.web{background:#E0F7FA;}.chicon.presencial{background:#EDE7F6;}
+.chn{font-size:14px;font-weight:700;color:var(--dk);}
+.chs{font-size:10px;margin-top:1px;}
+.chstats{display:grid;grid-template-columns:repeat(3,1fr);gap:5px;margin-top:9px;}
+.chstat{background:var(--g1);border-radius:7px;padding:7px;text-align:center;}
+.chsv{font-size:15px;font-weight:700;color:var(--dk);}
+.chsl{font-size:9px;color:var(--g5);margin-top:1px;}
+.chact{display:flex;gap:6px;margin-top:9px;}
+.chbtn{flex:1;padding:8px;border-radius:8px;border:none;font-size:11px;font-weight:600;cursor:pointer;}
+.chbtn-s{background:var(--g1);color:var(--g7);}
+.chbtn-p{background:var(--brl);color:var(--br);}
+.chbtn-r{background:#E8F8EE;color:#1a7a3a;}
+.chsync{font-size:10px;color:var(--g5);margin-top:5px;text-align:center;}
+
+/* KANBAN */
+.kanban{display:flex;flex-direction:column;gap:9px;}
+.kcol{background:#fff;border-radius:12px;padding:11px;border:1px solid var(--g1);}
+.kcolh{display:flex;align-items:center;justify-content:space-between;margin-bottom:9px;}
+.kcolt{font-size:12px;font-weight:700;color:var(--dk);}
+.kcoln{background:var(--g1);border-radius:20px;padding:2px 7px;font-size:10px;font-weight:700;color:var(--g7);}
+.ocard{border:1px solid var(--g1);border-radius:10px;padding:10px;margin-bottom:7px;border-left:4px solid var(--br);}
+.ocard:last-child{margin-bottom:0;}
+.ocard.rappi{border-left-color:var(--rap);}
+.ocard.pedidosya{border-left-color:var(--pdy);}
+.ocard.presencial{border-left-color:var(--pre);}
+.ocard.web{border-left-color:var(--web);}
+.och{display:flex;align-items:flex-start;justify-content:space-between;margin-bottom:5px;}
+.occode{font-size:13px;font-weight:700;color:var(--dk);}
+.ocsub{font-size:10px;color:var(--g5);margin-top:1px;}
+.ocits{font-size:11px;color:var(--g7);line-height:1.6;margin-bottom:5px;}
+.ocft{display:flex;align-items:center;justify-content:space-between;}
+.octot{font-size:13px;font-weight:700;color:var(--br);}
+.ocadv{padding:5px 11px;border-radius:7px;background:var(--dk);color:#fff;border:none;font-size:10px;font-weight:600;cursor:pointer;}
+
+/* SLOTS ADMIN */
+.sai{background:#fff;border-radius:11px;padding:12px;margin-bottom:7px;border:1px solid var(--g1);}
+.sat-bw{height:7px;background:var(--g1);border-radius:4px;overflow:hidden;margin:5px 0;}
+.sat-b{height:100%;border-radius:4px;transition:width .4s;}
+.sat-ok{background:var(--ok);}.sat-wa{background:var(--wa);}
+.sat-er{background:var(--er);}.sat-fu{background:#aaa;}
+
+/* PRODUCTS */
+.api{background:#fff;border-radius:11px;padding:10px;display:flex;align-items:center;gap:9px;margin-bottom:6px;border:1px solid var(--g1);}
+.ap-img{width:48px;height:48px;border-radius:9px;background:var(--g1);display:flex;align-items:center;justify-content:center;font-size:24px;overflow:hidden;flex-shrink:0;}
+.ap-img img{width:48px;height:48px;object-fit:cover;border-radius:9px;}
+.ap-inf{flex:1;min-width:0;}
+.ap-n{font-size:12px;font-weight:600;color:var(--dk);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+.ap-c{font-size:10px;color:var(--g5);}
+.ap-p{font-size:12px;font-weight:700;color:var(--br);margin-top:1px;}
+.ap-stk{font-size:10px;margin-top:1px;}
+.apacts{display:flex;gap:5px;flex-shrink:0;}
+.ibtn{width:28px;height:28px;border-radius:7px;border:none;cursor:pointer;font-size:13px;display:flex;align-items:center;justify-content:center;}
+.ibtn.ed{background:#E6F0FF;color:var(--in);}.ibtn.dl{background:#FFEBEA;color:var(--er);}
+.ibtn.tg{background:#E8F8EE;color:var(--ok);}.ibtn.tg.off{background:#FFEBEA;color:var(--er);}
+
+/* SECTION HEAD */
+.sch{display:flex;align-items:center;justify-content:space-between;margin-bottom:9px;}
+.sch h3{font-size:14px;font-weight:700;color:var(--dk);font-family:'Space Grotesk',sans-serif;}
+.scbtn{background:var(--brl);color:var(--br);border:none;padding:5px 12px;border-radius:7px;font-size:11px;font-weight:600;cursor:pointer;}
+
+/* BAR CHART */
+.bchw{background:#fff;border-radius:12px;padding:13px;margin-bottom:11px;border:1px solid var(--g1);}
+.bch{display:flex;align-items:flex-end;gap:5px;height:65px;margin-top:9px;}
+.bcc{flex:1;display:flex;flex-direction:column;align-items:center;gap:2px;}
+.bcbar{width:100%;border-radius:3px 3px 0 0;}
+.bclbl{font-size:8px;color:var(--g5);text-align:center;}
+.bcv{font-size:8px;font-weight:700;color:var(--dk);}
+
+/* PROMOS */
+.prac{background:#fff;border-radius:12px;padding:13px;margin-bottom:8px;border:1px solid var(--g1);}
+.prac.on{border-left:4px solid var(--ok);}.prac.off2{border-left:4px solid var(--g3);}
+.prsg{background:linear-gradient(135deg,#fff8e7,#fff3d4);border-radius:12px;padding:12px;margin-bottom:7px;border:1px solid #FFE4A0;}
+.prsg-t{font-size:12px;font-weight:700;color:var(--dk);}
+.prsg-s{font-size:10px;color:var(--g5);margin-top:2px;}
+.pracbtn{background:var(--wa);color:#fff;border:none;padding:6px 13px;border-radius:7px;font-size:11px;font-weight:600;cursor:pointer;margin-top:7px;}
+
+/* CH METRIC */
+.cmr{background:#fff;border-radius:10px;padding:11px 13px;margin-bottom:6px;border:1px solid var(--g1);display:flex;align-items:center;gap:11px;}
+.cmric{width:34px;height:34px;border-radius:8px;display:flex;align-items:center;justify-content:center;font-size:17px;flex-shrink:0;}
+
+/* QR */
+.qrcrd{background:#fff;border-radius:14px;padding:18px;text-align:center;border:1px solid var(--g1);}
+#aqr{display:flex;justify-content:center;margin:12px 0;}
+
+/* MODAL */
+.mover{position:fixed;inset:0;background:rgba(0,0,0,.52);z-index:500;display:flex;align-items:flex-end;justify-content:center;}
+.mover.hidden{display:none!important;}
+.modal{background:#fff;border-radius:16px 16px 0 0;padding:18px;width:100%;max-width:480px;max-height:86vh;overflow-y:auto;}
+.mt{font-size:16px;font-weight:700;color:var(--dk);margin-bottom:14px;font-family:'Space Grotesk',sans-serif;}
+.mft{display:flex;gap:8px;margin-top:6px;}
+.mb{flex:1;padding:11px;border-radius:10px;border:none;font-size:12px;font-weight:600;cursor:pointer;}
+.mb-p{background:var(--br);color:#fff;}.mb-s{background:var(--g1);color:var(--g7);}
+.imgprev{width:68px;height:68px;border-radius:10px;background:var(--g1);border:2px dashed var(--g3);display:flex;align-items:center;justify-content:center;font-size:26px;overflow:hidden;margin-bottom:7px;cursor:pointer;}
+.imgprev img{width:68px;height:68px;object-fit:cover;border-radius:8px;}
+.hdiv{height:1px;background:var(--g1);margin:10px 0;}
+.toast{position:fixed;bottom:74px;left:50%;transform:translateX(-50%);background:var(--dk);color:#fff;padding:8px 18px;border-radius:26px;font-size:11px;font-weight:500;z-index:999;opacity:0;transition:opacity .3s;white-space:nowrap;max-width:88vw;overflow:hidden;text-overflow:ellipsis;}
+.toast.show{opacity:1;}
+
+</style>
+</head>
+<body>
+
+<!-- APP -->
+<div id="app">
+
+  <div class="topbar">
+    <div class="topbar-logo">Order<span>Flow</span></div>
+  </div>
+
+  <!-- CLIENT WRAP -->
+  <div id="cwrap" style="display:flex;flex-direction:column;flex:1;">
+    <div class="sbanner open" id="csbanner">🟢 Tomando pedidos · La Brasita Burger</div>
+    <div class="cscreens" id="cscreens">
+
+      <!-- MENU -->
+      <div class="cs active" id="cs-menu">
+        <div id="pbanners"></div>
+        <div class="catnav" id="catnav"></div>
+        <div class="mpad" id="mlist"></div>
+      </div>
+
+      <!-- CART -->
+      <div class="cs" id="cs-cart">
+        <div class="sh"><button class="bk" onclick="goC('cs-menu')">←</button><div class="stitle">Tu pedido</div></div>
+        <div style="padding-top:7px;" id="cartlist"></div>
+        <div class="sumbox" id="csum"></div>
+        <div style="padding:3px 11px 7px;font-size:11px;color:var(--g5);" id="ptsprev"></div>
+        <button class="abtn" onclick="goC('cs-slot')">Elegir horario →</button>
+      </div>
+
+      <!-- SLOT -->
+      <div class="cs" id="cs-slot">
+        <div class="sh"><button class="bk" onclick="goC('cs-cart')">←</button><div class="stitle">¿Cuándo retirás?</div></div>
+        <p style="padding:9px 13px 0;font-size:12px;color:var(--g5);">Cupos limitados. 🟡 = alta demanda · 🔥 = promo activa</p>
+        <div class="slotgrid" id="slotgridC"></div>
+        <button class="abtn" id="slotnxt" disabled onclick="goC('cs-pay')" style="opacity:.45">Continuar →</button>
+      </div>
+
+      <!-- PAY -->
+      <div class="cs" id="cs-pay">
+        <div class="sh"><button class="bk" onclick="goC('cs-slot')">←</button><div class="stitle">Forma de pago</div></div>
+        <div style="height:9px;"></div>
+        <div class="pm" id="pm-card" onclick="selPay('card')"><div class="pm-ic">💳</div><div><div class="pm-lbl">Tarjeta</div><div class="pm-sb">Débito o crédito</div></div><div class="pm-ck" id="pk-card"></div></div>
+        <div class="pm" id="pm-mp" onclick="selPay('mp')"><div class="pm-ic">🔵</div><div><div class="pm-lbl">Mercado Pago</div><div class="pm-sb">QR o link de pago</div></div><div class="pm-ck" id="pk-mp"></div></div>
+        <div class="pm" id="pm-loc" onclick="selPay('local')"><div class="pm-ic">🏪</div><div><div class="pm-lbl">Pago en el local</div><div class="pm-sb">Al retirar</div></div><div class="pm-ck" id="pk-loc"></div></div>
+        <div class="sumbox" id="paysum"></div>
+        <button class="abtn" id="payconfbtn" onclick="doPay()" disabled style="opacity:.45">Confirmar pago →</button>
+      </div>
+
+      <!-- PAYING -->
+      <div class="cs" id="cs-paying">
+        <div style="padding:42px 18px;text-align:center;">
+          <div style="font-size:50px;margin-bottom:12px;" id="payic">⏳</div>
+          <div class="stitle" id="paytit">Procesando…</div>
+          <p style="font-size:12px;color:var(--g5);margin-top:6px;" id="paysub">Esperá un momento.</p>
+        </div>
+      </div>
+
+      <!-- FORM -->
+      <div class="cs" id="cs-form">
+        <div class="sh"><button class="bk" onclick="goC('cs-pay')">←</button><div class="stitle">Tus datos</div></div>
+        <div class="fwrap">
+          <label class="flbl">Tu nombre *</label>
+          <input class="finp" id="inp-name" placeholder="¿Cómo te llamás?">
+          <label class="flbl">Teléfono (opcional)</label>
+          <input class="finp" type="tel" id="inp-phone" placeholder="+54 11 xxxx-xxxx">
+          <label class="flbl">Observaciones</label>
+          <input class="finp" id="inp-obs" placeholder="Sin cebolla, extra queso…">
+        </div>
+        <div class="sumbox" id="formsum"></div>
+        <button class="abtn" onclick="confirmOrder()">Confirmar pedido ✓</button>
+      </div>
+
+      <!-- CONFIRMED -->
+      <div class="cs" id="cs-conf">
+        <div class="confw">
+          <div class="conf-ic">🎉</div>
+          <div class="conf-t">¡Pedido confirmado!</div>
+          <div class="conf-s">Mostrá este código al retirar.</div>
+          <div class="codebox"><div class="clbl">Código</div><div class="cval" id="confcode">---</div></div>
+          <div class="pkbox">
+            <div class="pklbl">🕐 Hora de retiro</div>
+            <div class="pkt" id="confpkt">—</div>
+            <div class="pkm" id="confpkm">—</div>
+          </div>
+          <div class="ptsbox"><span id="confpts">+0 pts</span><p id="conftpts">Total: 0 puntos</p></div>
+          <button class="abtn" onclick="goC('cs-status')">Ver estado del pedido</button>
+          <button class="abtn dk" style="margin-top:0" onclick="goC('cs-menu')">Volver al menú</button>
+        </div>
+      </div>
+
+      <!-- STATUS -->
+      <div class="cs" id="cs-status">
+        <div class="sh"><button class="bk" onclick="goC('cs-conf')">←</button><div class="stitle">Estado del pedido</div></div>
+        <div style="text-align:center;padding:13px 15px 3px;">
+          <div class="stitle" style="color:var(--br);" id="stcode">---</div>
+          <div style="font-size:11px;color:var(--g5);margin-top:2px;">Retiro: <span id="stslot">—</span></div>
+          <div style="margin-top:6px;" id="stpaybdg"></div>
+        </div>
+        <div class="trkr" id="tracker"></div>
+      </div>
+
+      <!-- POINTS -->
+      <div class="cs" id="cs-pts">
+        <div class="sh"><div class="stitle" style="margin-left:4px;">Mis puntos</div></div>
+        <div class="ptshero">
+          <div class="ptsv" id="ptsdisplay">0</div>
+          <div class="ptslbl">puntos · 1 pt cada $<span id="ptsratedisplay">100</span></div>
+        </div>
+        <p style="padding:10px 13px 3px;font-size:11px;color:var(--g5);">Canjeá por productos y descuentos:</p>
+        <div id="redeemlist"></div>
+      </div>
+
+    </div>
+    <div class="cartbar" id="cartbar">
+      <div class="cb-i"><span id="cbcount">0 ítems</span><strong id="cbtotal">$0</strong></div>
+      <button class="cb-btn" onclick="goC('cs-cart')">Ver pedido →</button>
+    </div>
+    <nav class="cnav">
+      <button class="cnbtn active" onclick="cnavgo(this,'cs-menu')"><span class="ni">🍔</span>Menú</button>
+      <button class="cnbtn" onclick="cnavgo(this,'cs-cart')"><span class="ni">🛒</span>Carrito</button>
+      <button class="cnbtn" onclick="cnavgo(this,'cs-pts')"><span class="ni">⭐</span>Puntos</button>
+    </nav>
+  </div>
+
+</div>
+<div class="toast" id="toast"></div>
+
+<script>
+// ============================================================
+// CONFIGURACION DE API
+// ============================================================
+// Si el frontend se sirve desde el mismo backend (Railway), API_BASE
+// queda vacio y las llamadas son relativas ('/api/...').
+// Si lo abris suelto en tu compu, completa con la URL de tu backend.
+const API_BASE = ''; // ej: 'https://orderflow-backend.up.railway.app'
+
+async function api(path, options = {}) {
+  const res = await fetch(API_BASE + '/api' + path, {
+    headers: { 'Content-Type': 'application/json' },
+    ...options,
+  });
+  let data = null;
+  try { data = await res.json(); } catch (e) { /* respuesta sin body */ }
+  if (!res.ok) {
+    const msg = (data && data.error) ? data.error : `Error ${res.status}`;
+    throw new Error(msg);
+  }
+  return data;
+}
+const apiGet = (path) => api(path);
+const apiPost = (path, body) => api(path, { method: 'POST', body: JSON.stringify(body) });
+const apiPut = (path, body) => api(path, { method: 'PUT', body: JSON.stringify(body) });
+const apiDelete = (path) => api(path, { method: 'DELETE' });
+
+// ============================================================
+// CONSTANTS
+// ============================================================
+const LOCAL_URL = window.location.host || 'orderflow.app/labrasita';
+const CATL={all:'Todo',burgers:'🍔 Hamburguesas',combos:'🍱 Combos',bebidas:'🥤 Bebidas',extras:'🍟 Extras',postres:'🍦 Postres'};
+const CHM={
+  web:{name:'Web / QR',icon:'🌐',cls:'web'},
+  presencial:{name:'Presencial',icon:'🏪',cls:'presencial'},
+  rappi:{name:'Rappi',icon:'🟠',cls:'rappi'},
+  pedidosya:{name:'PedidosYa',icon:'🔴',cls:'pedidosya'}
+};
+const PTL={pct:'% Descuento',dblpts:'Doble puntos',drink:'Bebida gratis',ship:'Envío bonificado'};
+
+// ============================================================
+// ESTADO LOCAL (cache en memoria de lo ultimo que devolvio el backend)
+// ============================================================
+// Ya no guardamos nada en localStorage: esto es solo una copia en
+// memoria para no estar pidiendole todo al servidor en cada click.
+// Se recarga llamando a refreshAll() despues de cada accion que cambia datos.
+let DATA = {
+  settings: { store_open: true, points_rate: 100, local_name: 'Mi local' },
+  products: [],
+  slots: [],
+  channels: [],
+  orders: [],
+  promos: [],
+  rewards: [],
+};
+
+let cart={},selectedSlotId=null,selectedPayment=null,currentOrderCode=null,currentCat='all',appliedPromo=null;
+let currentCustomerName='';
+
+
+// ============================================================
+// CARGA DE DATOS DESDE EL BACKEND
+// ============================================================
+async function refreshAll() {
+  const [settings, products, slots, channels, orders, promos, rewardsRes] = await Promise.all([
+    apiGet('/settings'),
+    apiGet('/products'),
+    apiGet('/slots'),
+    apiGet('/channels'),
+    apiGet('/orders'),
+    apiGet('/promotions'),
+    apiGet('/points/rewards'),
+  ]);
+  DATA.settings = settings;
+  DATA.products = products;
+  DATA.slots = slots;
+  DATA.channels = channels;
+  DATA.orders = orders;
+  DATA.promos = promos;
+  DATA.rewards = rewardsRes;
+}
+
+// helpers de saturacion, ahora usando los nombres de columna que devuelve la API
+function satPct(s){return s.max_capacity>0?Math.round((s.used_capacity/s.max_capacity)*100):0;}
+function satLevel(s){const p=satPct(s);if(s.used_capacity>=s.max_capacity)return'full';if(p>=85)return'red';if(p>=60)return'yellow';return'green';}
+function demandLabel(s){const p=satPct(s);if(s.used_capacity>=s.max_capacity||!s.active)return{lbl:'Sin cupos',cls:'d-fu'};if(p>=60)return{lbl:'Alta demanda',cls:'d-hi'};if(p>=30)return{lbl:'Demanda normal',cls:'d-md'};return{lbl:'Baja demanda',cls:'d-lo'};}
+function totalOcc(){const t=DATA.slots.reduce((s,x)=>s+x.max_capacity,0);const u=DATA.slots.reduce((s,x)=>s+x.used_capacity,0);return t>0?Math.round((u/t)*100):0;}
+function estWait(){const o=totalOcc();if(o>=85)return 45;if(o>=60)return 35;if(o>=30)return 25;return 15;}
+function isLowDemand(s){return satPct(s)<30&&s.active&&s.used_capacity<s.max_capacity;}
+function activePromoFor(slotId){return DATA.promos.find(p=>p.slot_id===slotId&&p.active)||null;}
+function applyPromoCalc(total,promo){
+  if(!promo)return{discounted:total,discount:0};
+  if(promo.promo_type==='pct'){const d=Math.round(total*promo.discount_pct/100);return{discounted:total-d,discount:d};}
+  return{discounted:total,discount:0};
+}
+function getProd(id){return DATA.products.find(p=>p.id===+id)||{};}
+function getSelSlot(){return DATA.slots.find(s=>s.id===selectedSlotId);}
+
+// ============================================================
+// INICIO DIRECTO (sin pantalla de seleccion de rol)
+// ============================================================
+async function initClientApp(){
+  try{ await refreshAll(); }
+  catch(e){ toast('No se pudo conectar al servidor: '+e.message); return; }
+  renderMenu();renderSlotsC();renderPoints();updateBanner();renderPBanners();
+}
+
+// ============================================================
+// CLIENT — MENU
+// ============================================================
+function renderMenu(){
+  const cats=['all',...new Set(DATA.products.map(p=>p.category))];
+  document.getElementById('catnav').innerHTML=cats.map(c=>`<button class="cpill ${c===currentCat?'active':''}" onclick="setCat('${c}',this)">${CATL[c]||c}</button>`).join('');
+  const prods=currentCat==='all'?DATA.products:DATA.products.filter(p=>p.category===currentCat);
+  document.getElementById('mlist').innerHTML=prods.map(p=>{
+    const img=p.image_url?`<img src="${p.image_url}">`:`<span>${p.emoji||'🍔'}</span>`;
+    const sw=p.available&&p.stock<=p.stock_min&&p.stock>0?`<div class="stktag">⚠️ Pocas unidades (${p.stock})</div>`:'';
+    return`<div class="pcard" style="${p.available?'':'opacity:.55;'}">
+      <div class="pimg">${img}</div>
+      <div class="pbody">
+        <div><div class="pname">${p.name}</div><div class="pdesc">${p.description}</div>${sw}</div>
+        <div class="pfoot"><div class="pprice">$${p.price.toLocaleString('es-AR')}</div>
+        ${p.available?`<button class="addbtn" onclick="addCart(${p.id})">+</button>`:`<span class="utag">No disponible</span>`}</div>
+      </div></div>`;
+  }).join('');
+}
+function renderPBanners(){
+  const ap=DATA.promos.filter(p=>p.active);
+  const area=document.getElementById('pbanners');
+  if(!ap.length){area.innerHTML='';return;}
+  area.innerHTML=ap.map(p=>{
+    if(!p.start_time)return'';
+    const b=p.promo_type==='pct'?p.discount_pct+'% OFF':p.promo_type==='dblpts'?'⭐ Doble puntos':'Beneficio especial';
+    return`<div class="prbanner"><div class="prb-lbl">🔥 Promo activa</div><div class="prb-t">${b} · ${p.start_time}–${p.end_time}</div><div class="prb-s">${p.name} · Menos espera + beneficio exclusivo</div></div>`;
+  }).join('');
+}
+function setCat(c,btn){currentCat=c;document.querySelectorAll('.cpill').forEach(b=>b.classList.remove('active'));btn.classList.add('active');renderMenu();}
+function addCart(id){const p=getProd(id);if(!p||!p.available)return;cart[id]=(cart[id]||0)+1;updateCartBar();toast('Agregado ✓');}
+function updateCartBar(){
+  const ids=Object.keys(cart);const total=ids.reduce((s,id)=>s+getProd(+id).price*cart[id],0);const cnt=ids.reduce((s,id)=>s+cart[id],0);
+  document.getElementById('cbcount').textContent=cnt+(cnt===1?' ítem':' ítems');
+  document.getElementById('cbtotal').textContent='$'+total.toLocaleString('es-AR');
+  document.getElementById('cartbar').classList.toggle('vis',cnt>0);
+}
+function cnavgo(btn,scr){document.querySelectorAll('.cnbtn').forEach(b=>b.classList.remove('active'));btn.classList.add('active');goC(scr);}
+
+// ============================================================
+// CART
+// ============================================================
+function renderCart(){
+  const ids=Object.keys(cart);const list=document.getElementById('cartlist');
+  if(!ids.length){list.innerHTML='<p style="text-align:center;padding:24px;color:var(--g5);font-size:12px;">El carrito está vacío</p>';return;}
+  list.innerHTML=ids.map(id=>{
+    const p=getProd(+id);const img=p.image_url?`<img class="ci-img" src="${p.image_url}">`:`<div class="ci-em">${p.emoji||'🍔'}</div>`;
+    return`<div class="citem">${img}<div class="ci-n"><div class="ci-nm">${p.name}</div><div class="ci-pr">$${(p.price*cart[id]).toLocaleString('es-AR')}</div></div>
+    <div class="qw"><button class="qb" onclick="chQty(${id},-1)">−</button><span class="qn">${cart[id]}</span><button class="qb" onclick="chQty(${id},1)">+</button></div></div>`;
+  }).join('');
+  const total=ids.reduce((s,id)=>s+getProd(+id).price*cart[id],0);
+  const {discounted,discount}=applyPromoCalc(total,appliedPromo);
+  const pts=Math.floor(discounted/(DATA.settings.points_rate||100))*(appliedPromo&&appliedPromo.promo_type==='dblpts'?2:1);
+  let h=`<div class="sr"><span class="sl">Subtotal</span><span class="sv">$${total.toLocaleString('es-AR')}</span></div>`;
+  if(discount>0)h+=`<div class="sr"><span class="sl">Descuento promo</span><span class="sdisc">−$${discount.toLocaleString('es-AR')}</span></div>`;
+  h+=`<div class="sd"></div><div class="sr"><span class="sl" style="font-weight:700">Total</span><span class="stot">$${discounted.toLocaleString('es-AR')}</span></div>`;
+  document.getElementById('csum').innerHTML=h;
+  document.getElementById('ptsprev').textContent=`⭐ Vas a sumar +${pts} puntos (1 pt cada $${DATA.settings.points_rate||100})`;
+}
+function chQty(id,d){cart[id]=(cart[id]||0)+d;if(cart[id]<=0)delete cart[id];updateCartBar();renderCart();}
+
+
+// ============================================================
+// SLOTS CLIENTE
+// ============================================================
+function renderSlotsC(){
+  const grid=document.getElementById('slotgridC');const wait=estWait();
+  grid.innerHTML=DATA.slots.map(s=>{
+    const full=s.used_capacity>=s.max_capacity;const off=!s.active;const dem=demandLabel(s);
+    const promo=activePromoFor(s.id);const isSel=selectedSlotId===s.id;
+    let cls=off?'off':(full?'full':(dem.cls==='d-hi'?'hi':''));
+    if(isSel)cls='sel';
+    const pl=promo?`<div class="sc-pr">🔥 ${promo.promo_type==='pct'?promo.discount_pct+'% OFF':'Doble puntos'}</div>`:'';
+    const rl=isLowDemand(s)&&!promo?`<div class="sc-rec">✓ Menos espera</div>`:'';
+    return`<div class="scard ${cls}" onclick="selSlot(${s.id})">
+      <div class="sc-top"><div class="sc-t">${s.start_time}</div><span class="sdem ${dem.cls}">${off?'Bloqueado':(full?'Lleno':dem.lbl)}</span></div>
+      <div class="sc-av">${off||full?'':(s.max_capacity-s.used_capacity)+' cupos'}</div>
+      <div class="sc-eta">⏱ ~${wait} min</div>${pl}${rl}
+    </div>`;
+  }).join('');
+}
+function selSlot(id){
+  const s=DATA.slots.find(x=>x.id===id);if(!s||!s.active||s.used_capacity>=s.max_capacity)return;
+  selectedSlotId=id;appliedPromo=activePromoFor(id);renderSlotsC();
+  const btn=document.getElementById('slotnxt');btn.disabled=false;btn.style.opacity='1';
+  if(appliedPromo)toast(`🔥 Promo aplicada: ${appliedPromo.name}`);
+}
+
+// ============================================================
+// PAYMENT
+// ============================================================
+function renderPaySum(){
+  const ids=Object.keys(cart);const raw=ids.reduce((s,id)=>s+getProd(+id).price*cart[id],0);
+  const {discounted,discount}=applyPromoCalc(raw,appliedPromo);
+  let h=`<div class="sr"><span class="sl">Subtotal</span><span class="sv">$${raw.toLocaleString('es-AR')}</span></div>`;
+  if(discount>0)h+=`<div class="sr"><span class="sl">Descuento</span><span class="sdisc">−$${discount.toLocaleString('es-AR')}</span></div>`;
+  h+=`<div class="sd"></div><div class="sr"><span class="sl" style="font-weight:700">Total a pagar</span><span class="stot">$${discounted.toLocaleString('es-AR')}</span></div>`;
+  document.getElementById('paysum').innerHTML=h;
+}
+function selPay(m){
+  selectedPayment=m;
+  ['card','mp','loc'].forEach(k=>{
+    const match=(k===m)||(m==='local'&&k==='loc');
+    document.getElementById('pm-'+k).classList.toggle('sel',match);
+    const ch=document.getElementById('pk-'+k);
+    ch.textContent=match?'✓':'';
+    ch.style.background=match?'var(--br)':'';ch.style.color=match?'#fff':'';
+  });
+  const btn=document.getElementById('payconfbtn');btn.disabled=false;btn.style.opacity='1';
+}
+function doPay(){
+  // NOTA: este es un simulador de pasarela de pago. No procesa tarjetas reales.
+  // Para pagos reales hay que integrar un proveedor como Mercado Pago o Stripe
+  // (ver seccion de comentarios al final del archivo).
+  goC('cs-paying');
+  const ic=document.getElementById('payic'),ti=document.getElementById('paytit'),su=document.getElementById('paysub');
+  ic.textContent='⏳';ti.textContent='Procesando pago…';su.textContent='Esperá un momento.';
+  setTimeout(()=>{
+    const ok=selectedPayment==='local'||Math.random()>0.08;
+    if(ok){ic.textContent='✅';ti.textContent='Pago aprobado';su.textContent=selectedPayment==='local'?'Pagás al retirar.':'Pago procesado correctamente.';setTimeout(()=>goC('cs-form'),1300);}
+    else{ic.textContent='❌';ti.textContent='Pago rechazado';su.textContent='Intentá con otro medio.';setTimeout(()=>goC('cs-pay'),1800);}
+  },1800);
+}
+function renderFormSum(){
+  const ids=Object.keys(cart);const raw=ids.reduce((s,id)=>s+getProd(+id).price*cart[id],0);
+  const {discounted,discount}=applyPromoCalc(raw,appliedPromo);
+  const slot=getSelSlot();const slotTxt=slot?`${slot.start_time}–${slot.end_time}`:'—';
+  const pl={card:'Tarjeta',mp:'Mercado Pago',local:'Pago en el local'};
+  let h=`<div class="sr"><span class="sl">Franja</span><span class="sv">${slotTxt}</span></div>`;
+  h+=`<div class="sr"><span class="sl">Pago</span><span class="sv">${pl[selectedPayment]||'—'}</span></div>`;
+  if(discount>0)h+=`<div class="sr"><span class="sl">Descuento promo</span><span class="sdisc">−$${discount.toLocaleString('es-AR')}</span></div>`;
+  h+=`<div class="sd"></div><div class="sr"><span class="sl" style="font-weight:700">Total</span><span class="stot">$${discounted.toLocaleString('es-AR')}</span></div>`;
+  document.getElementById('formsum').innerHTML=h;
+}
+
+// ============================================================
+// CONFIRMAR PEDIDO (llama de verdad al backend)
+// ============================================================
+async function confirmOrder(){
+  const name=document.getElementById('inp-name').value.trim();
+  const phone=document.getElementById('inp-phone').value.trim();
+  if(!name){toast('Ingresá tu nombre');return;}
+  const ids=Object.keys(cart);if(!ids.length)return;
+  const slot=getSelSlot();
+  if(!slot){toast('Elegí una franja horaria');return;}
+
+  const payload={
+    customer_name:name,
+    customer_phone:phone,
+    channel:'web',
+    items:ids.map(id=>({product_id:+id,quantity:cart[id]})),
+    preferred_slot_id:slot.id,
+    payment_method:selectedPayment||'local',
+    promo_id:appliedPromo?appliedPromo.id:null,
+  };
+
+  let order;
+  try{
+    order=await apiPost('/orders',payload);
+  }catch(e){
+    toast('❌ '+e.message);
+    return;
+  }
+
+  currentOrderCode=order.code;
+  currentCustomerName=name;
+
+  // refrescar todo (stock, cupos, etc cambiaron en el server)
+  await refreshAll();
+
+  document.getElementById('confcode').textContent=order.code;
+  document.getElementById('confpkt').textContent=`${order.slot.start} – ${order.slot.end}`;
+  document.getElementById('confpkm').textContent=`Tu pedido estará listo entre las ${order.slot.start} y las ${order.slot.end}`;
+  if(order.was_reassigned){
+    toast('⚠️ Tu franja elegida estaba llena, te asignamos la siguiente disponible');
+  }
+  document.getElementById('confpts').textContent=`+${order.points_earned} puntos ganados`;
+  document.getElementById('conftpts').textContent=`Pedido registrado`;
+  document.getElementById('stcode').textContent=order.code;
+  document.getElementById('stslot').textContent=`${order.slot.start}–${order.slot.end}`;
+  document.getElementById('stpaybdg').innerHTML=`<span class="badge ${order.payment_status==='aprobado'?'b-ok':'b-wa'}">${order.payment_status==='aprobado'?'Pago aprobado':'Pago al retirar'}</span>`;
+  renderTracker('recibido');
+  cart={};selectedSlotId=null;selectedPayment=null;appliedPromo=null;updateCartBar();
+  goC('cs-conf');
+}
+
+function renderTracker(cur){
+  const steps=[{k:'recibido',l:'Pedido recibido',d:'Registrado correctamente'},{k:'preparando',l:'En preparación',d:'La cocina está trabajando'},{k:'listo',l:'Listo para retirar',d:'Pasá al mostrador'},{k:'entregado',l:'Entregado',d:'¡Que lo disfrutes!'}];
+  const ord=['recibido','preparando','listo','entregado'];const ci=ord.indexOf(cur);
+  document.getElementById('tracker').innerHTML=steps.map((s,i)=>`<div class="tri"><div class="trd ${i<ci?'done':i===ci?'cur':''}">${i<ci?'✓':i===ci?'🔥':''}</div><div><h4>${s.l}</h4><p>${s.d}</p></div></div>`).join('');
+}
+
+async function goC(id){
+  document.querySelectorAll('.cs').forEach(s=>s.classList.remove('active'));
+  document.getElementById(id).classList.add('active');
+  document.getElementById('cscreens').scrollTop=0;
+  if(id==='cs-cart')renderCart();
+  if(id==='cs-slot')renderSlotsC();
+  if(id==='cs-pay')renderPaySum();
+  if(id==='cs-form')renderFormSum();
+  if(id==='cs-status'&&currentOrderCode){
+    try{
+      await refreshAll();
+      const o=DATA.orders.find(x=>x.code===currentOrderCode);
+      if(o)renderTracker(o.status);
+    }catch(e){/* si falla, se queda con el ultimo estado conocido */}
+  }
+}
+function updateBanner(){
+  const b=document.getElementById('csbanner');
+  if(DATA.settings.store_open){b.className='sbanner open';b.textContent=`🟢 Tomando pedidos · ${DATA.settings.local_name}`;}
+  else{b.className='sbanner closed';b.textContent='🟡 Pedidos pausados momentáneamente';}
+}
+
+
+// ============================================================
+// POINTS — CLIENTE
+// ============================================================
+async function renderPoints(){
+  let pts=0;
+  if(currentCustomerName){
+    try{
+      const c=await apiGet('/points/customer/'+encodeURIComponent(currentCustomerName));
+      pts=c.points||0;
+    }catch(e){/* sin historial todavia */}
+  }
+  document.getElementById('ptsdisplay').textContent=pts.toLocaleString('es-AR');
+  document.getElementById('ptsratedisplay').textContent=(DATA.settings.points_rate||100);
+  if(!DATA.rewards||!DATA.rewards.length){document.getElementById('redeemlist').innerHTML='<p style="text-align:center;padding:18px;color:var(--g5);font-size:12px;">Sin premios disponibles.</p>';return;}
+  document.getElementById('redeemlist').innerHTML=DATA.rewards.map(r=>{
+    const ok=pts>=r.points_cost;
+    return`<div class="rcard"><div style="font-size:26px;">${r.emoji||'🎁'}</div><div style="flex:1"><div style="font-size:12px;font-weight:600;color:var(--dk);">${r.name}</div><div class="rdpts">${r.points_cost.toLocaleString('es-AR')} puntos</div></div>
+    <button class="rdbtn ${ok?'':'dis'}" onclick="redeem(${r.id},${r.points_cost},'${r.name}')" ${ok?'':'disabled'}>${ok?'Canjear':'Sin puntos'}</button></div>`;
+  }).join('');
+}
+async function redeem(rewardId,pts,name){
+  if(!currentCustomerName){toast('Hacé un pedido primero para identificarte');return;}
+  try{
+    const r=await apiPost('/points/redeem',{customer_name:currentCustomerName,reward_id:rewardId});
+    toast(`¡Canjeaste: ${r.reward}! Puntos restantes: ${r.remaining_points}`);
+    renderPoints();
+  }catch(e){
+    toast('❌ '+e.message);
+  }
+}
+
+// ============================================================
+// TOAST
+// ============================================================
+function toast(msg){const t=document.getElementById('toast');t.textContent=msg;t.classList.add('show');clearTimeout(window._tt);window._tt=setTimeout(()=>t.classList.remove('show'),3200);}
+
+// ============================================================
+// INIT
+// ============================================================
+window.addEventListener('DOMContentLoaded',()=>{
+  initClientApp();
+});
+</script>
+</body>
+</html>
