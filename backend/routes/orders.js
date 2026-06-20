@@ -3,6 +3,7 @@ const express = require('express');
 const router = express.Router();
 const pool = require('../db/pool');
 const { requireAdminAuth } = require('../middleware/auth');
+const { resolveLocal } = require('../middleware/resolveLocal');
 
 // ------------------------------------------------------------
 // Helper: tiempo estimado de preparacion segun ocupacion total de la cocina
@@ -14,15 +15,16 @@ function estimatedWaitMinutes(occupancyPct) {
 }
 
 // ------------------------------------------------------------
-// GET /api/orders - lista TODOS los pedidos (SOLO ADMIN, para el dashboard de cocina)
-router.get('/', requireAdminAuth, async (req, res) => {
+// GET /api/admin/orders - lista TODOS los pedidos del local del admin
+router.get('/admin/orders', requireAdminAuth, async (req, res) => {
   try {
     const ordersResult = await pool.query(`
       SELECT o.*, s.start_time, s.end_time
       FROM orders o
       LEFT JOIN time_slots s ON o.slot_id = s.id
+      WHERE o.local_id = $1
       ORDER BY o.created_at DESC LIMIT 200
-    `);
+    `, [req.admin.local_id]);
     const orders = ordersResult.rows;
 
     if (orders.length === 0) return res.json([]);
@@ -52,18 +54,20 @@ router.get('/', requireAdminAuth, async (req, res) => {
 });
 
 // ------------------------------------------------------------
-// POST /api/orders - crear un pedido nuevo
+// POST /api/:slug/orders - crear un pedido nuevo PARA ESE LOCAL
 //
 // Flujo completo (todo dentro de una transaccion para evitar inconsistencias
 // si dos pedidos llegan al mismo tiempo):
-// 1. Verifica que el canal este activo
-// 2. Verifica disponibilidad y stock de cada producto
-// 3. Busca cupo en la franja elegida; si no hay, reasigna a la siguiente disponible
+// 1. Verifica que el canal este activo (de ese local)
+// 2. Verifica disponibilidad y stock de cada producto (de ese local)
+// 3. Busca cupo en la franja elegida (de ese local); si no hay, reasigna
 // 4. Si no hay ninguna franja con cupo, rechaza el pedido
 // 5. Descuenta stock y cupo de franja
-// 6. Calcula puntos y horario estimado
+// 6. Identifica/crea al cliente por TELEFONO (unico dentro del local) y
+//    calcula puntos segun la tasa propia del local
 // 7. Crea el pedido y sus items
-router.post('/', async (req, res) => {
+router.post('/:slug/orders', resolveLocal, async (req, res) => {
+  const localId = req.local.id;
   const {
     customer_name,
     customer_phone,
@@ -74,20 +78,18 @@ router.post('/', async (req, res) => {
     promo_id,
   } = req.body;
 
-  if (!customer_name || !channel || !Array.isArray(items) || items.length === 0) {
-    return res.status(400).json({ error: 'Faltan datos obligatorios del pedido' });
+  if (!customer_name || !customer_phone || !channel || !Array.isArray(items) || items.length === 0) {
+    return res.status(400).json({ error: 'Faltan datos obligatorios del pedido (nombre, teléfono, canal e items)' });
   }
 
-  // client se obtiene afuera del try para poder liberarlo siempre en el finally,
-  // sin importar por donde salga la funcion (exito, error de negocio, o excepcion)
   const client = await pool.connect();
   let responseSent = false;
 
   try {
     await client.query('BEGIN');
 
-    // 1. Verificar canal activo
-    const chanRes = await client.query('SELECT * FROM channels WHERE key = $1', [channel]);
+    // 1. Verificar canal activo (de este local)
+    const chanRes = await client.query('SELECT * FROM channels WHERE key = $1 AND local_id = $2', [channel, localId]);
     if (chanRes.rows.length === 0 || !chanRes.rows[0].active) {
       await client.query('ROLLBACK');
       res.status(409).json({ error: `El canal "${channel}" está pausado. No se pueden recibir pedidos en este momento.` });
@@ -95,11 +97,11 @@ router.post('/', async (req, res) => {
       return;
     }
 
-    // 2. Verificar disponibilidad y stock de cada producto, calcular total
+    // 2. Verificar disponibilidad y stock de cada producto (de este local)
     let rawTotal = 0;
     const resolvedItems = [];
     for (const it of items) {
-      const prodRes = await client.query('SELECT * FROM products WHERE id = $1', [it.product_id]);
+      const prodRes = await client.query('SELECT * FROM products WHERE id = $1 AND local_id = $2', [it.product_id, localId]);
       if (prodRes.rows.length === 0) {
         await client.query('ROLLBACK');
         res.status(404).json({ error: `Producto ${it.product_id} no existe` });
@@ -123,14 +125,14 @@ router.post('/', async (req, res) => {
       resolvedItems.push({ product, quantity: it.quantity });
     }
 
-    // 3 y 4. Buscar cupo en franja preferida o reasignar a la siguiente disponible
+    // 3 y 4. Buscar cupo en franja preferida (de este local) o reasignar
     let assignedSlot = null;
     let wasReassigned = false;
 
     if (preferred_slot_id) {
       const preferredRes = await client.query(
-        'SELECT * FROM time_slots WHERE id = $1 AND active = true FOR UPDATE',
-        [preferred_slot_id]
+        'SELECT * FROM time_slots WHERE id = $1 AND local_id = $2 AND active = true FOR UPDATE',
+        [preferred_slot_id, localId]
       );
       if (preferredRes.rows.length > 0 && preferredRes.rows[0].used_capacity < preferredRes.rows[0].max_capacity) {
         assignedSlot = preferredRes.rows[0];
@@ -138,17 +140,17 @@ router.post('/', async (req, res) => {
     }
 
     if (!assignedSlot) {
-      // la franja preferida no existe, esta inactiva o esta llena -> buscar la siguiente con cupo
       const nextRes = await client.query(
         `SELECT * FROM time_slots
-         WHERE active = true AND used_capacity < max_capacity
-         ORDER BY start_time ASC FOR UPDATE`
+         WHERE local_id = $1 AND active = true AND used_capacity < max_capacity
+         ORDER BY start_time ASC FOR UPDATE`,
+        [localId]
       );
       if (nextRes.rows.length === 0) {
         await client.query('ROLLBACK');
-        // Pedido rechazado por falta de capacidad: lo registramos en metricas (fuera de esta transaccion)
         await pool.query(
-          'UPDATE operational_metrics SET rejected_by_capacity = rejected_by_capacity + 1 WHERE id = 1'
+          'UPDATE operational_metrics SET rejected_by_capacity = rejected_by_capacity + 1 WHERE local_id = $1',
+          [localId]
         );
         res.status(409).json({
           error: 'No hay capacidad disponible para este horario. Recomendá otro horario o pausá temporalmente el canal.',
@@ -162,7 +164,7 @@ router.post('/', async (req, res) => {
       }
     }
 
-    // 5a. Descontar cupo de la franja (dentro de la transaccion, ya bloqueada con FOR UPDATE)
+    // 5a. Descontar cupo de la franja
     await client.query(
       'UPDATE time_slots SET used_capacity = used_capacity + 1 WHERE id = $1',
       [assignedSlot.id]
@@ -180,11 +182,11 @@ router.post('/', async (req, res) => {
       }
     }
 
-    // Aplicar promocion si corresponde
+    // Aplicar promocion si corresponde (verificando que sea de este local)
     let discount = 0;
     let promoType = null;
     if (promo_id) {
-      const promoRes = await client.query('SELECT * FROM promotions WHERE id = $1 AND active = true', [promo_id]);
+      const promoRes = await client.query('SELECT * FROM promotions WHERE id = $1 AND local_id = $2 AND active = true', [promo_id, localId]);
       if (promoRes.rows.length > 0) {
         const promo = promoRes.rows[0];
         promoType = promo.promo_type;
@@ -196,31 +198,32 @@ router.post('/', async (req, res) => {
     }
     const total = rawTotal - discount;
 
-    // 6. Calcular puntos (doble si la promo es de tipo dblpts)
-    const settingsRes = await client.query('SELECT points_rate FROM store_settings WHERE id = 1');
-    const pointsRate = settingsRes.rows[0]?.points_rate || 100;
+    // 6. Calcular puntos segun la tasa del local (doble si la promo es dblpts)
+    const pointsRate = req.local.points_rate || 100;
     let pointsEarned = Math.floor(total / pointsRate);
     if (promoType === 'dblpts') pointsEarned *= 2;
 
-    // Cliente: buscar o crear por nombre (simplificado, sin login)
+    // Cliente: identificado por TELEFONO, unico dentro de este local.
+    // Si ya existia (mismo telefono, mismo local), suma puntos a su cuenta.
+    // Si es nuevo, lo crea. El mismo telefono en OTRO local es un cliente distinto.
     let customerId = null;
     const custRes = await client.query(
-      'SELECT * FROM customers WHERE name = $1 LIMIT 1',
-      [customer_name]
+      'SELECT * FROM customers WHERE local_id = $1 AND phone = $2 LIMIT 1',
+      [localId, customer_phone]
     );
     if (custRes.rows.length > 0) {
       customerId = custRes.rows[0].id;
-      await client.query('UPDATE customers SET points = points + $1 WHERE id = $2', [pointsEarned, customerId]);
+      await client.query('UPDATE customers SET points = points + $1, name = $2 WHERE id = $3', [pointsEarned, customer_name, customerId]);
     } else {
       const newCust = await client.query(
-        'INSERT INTO customers (name, phone, points) VALUES ($1, $2, $3) RETURNING id',
-        [customer_name, customer_phone || '', pointsEarned]
+        'INSERT INTO customers (local_id, name, phone, points) VALUES ($1, $2, $3, $4) RETURNING id',
+        [localId, customer_name, customer_phone, pointsEarned]
       );
       customerId = newCust.rows[0].id;
     }
 
-    // Generar codigo de pedido correlativo simple
-    const codeRes = await client.query('SELECT COUNT(*) FROM orders');
+    // Generar codigo de pedido correlativo, UNICO DENTRO DEL LOCAL (no global)
+    const codeRes = await client.query('SELECT COUNT(*) FROM orders WHERE local_id = $1', [localId]);
     const orderCode = 'BRG-' + (100 + parseInt(codeRes.rows[0].count, 10));
 
     const isDelivery = channel === 'rappi' || channel === 'pedidosya';
@@ -229,11 +232,11 @@ router.post('/', async (req, res) => {
 
     const orderInsert = await client.query(
       `INSERT INTO orders
-        (code, customer_id, customer_name, channel, slot_id, raw_total, discount, total,
+        (local_id, code, customer_id, customer_name, customer_phone, channel, slot_id, raw_total, discount, total,
          promo_id, payment_method, payment_status, status, is_delivery, eta, points_earned)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,'recibido',$12,$13,$14)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,'recibido',$14,$15,$16)
        RETURNING *`,
-      [orderCode, customerId, customer_name, channel, assignedSlot.id, rawTotal, discount, total,
+      [localId, orderCode, customerId, customer_name, customer_phone, channel, assignedSlot.id, rawTotal, discount, total,
         promo_id || null, payment_method || 'local', paymentStatus, isDelivery, eta, pointsEarned]
     );
     const newOrder = orderInsert.rows[0];
@@ -246,15 +249,12 @@ router.post('/', async (req, res) => {
       );
     }
 
-    // Actualizar ultima sincronizacion del canal
-    await client.query('UPDATE channels SET last_sync = now() WHERE key = $1', [channel]);
+    await client.query('UPDATE channels SET last_sync = now() WHERE key = $1 AND local_id = $2', [channel, localId]);
 
-    // Si hubo reasignacion, lo registramos en metricas (despues del commit para no
-    // bloquear la fila de metricas dentro de la misma transaccion del pedido)
     await client.query('COMMIT');
 
     if (wasReassigned) {
-      await pool.query('UPDATE operational_metrics SET reassigned_count = reassigned_count + 1 WHERE id = 1');
+      await pool.query('UPDATE operational_metrics SET reassigned_count = reassigned_count + 1 WHERE local_id = $1', [localId]);
     }
 
     res.status(201).json({
@@ -276,11 +276,8 @@ router.post('/', async (req, res) => {
 });
 
 // ------------------------------------------------------------
-// GET /api/orders/code/:code - consulta PUBLICA del estado de un pedido propio.
-// El cliente usa esto para la pantalla de "seguimiento de mi pedido", sin
-// necesitar login ni poder ver los pedidos de otros clientes (solo devuelve
-// los datos de ESE pedido puntual, identificado por su codigo unico).
-router.get('/code/:code', async (req, res) => {
+// GET /api/:slug/orders/code/:code - consulta PUBLICA del estado de un pedido propio.
+router.get('/:slug/orders/code/:code', resolveLocal, async (req, res) => {
   const { code } = req.params;
   try {
     const result = await pool.query(`
@@ -288,8 +285,8 @@ router.get('/code/:code', async (req, res) => {
              s.start_time, s.end_time
       FROM orders o
       LEFT JOIN time_slots s ON o.slot_id = s.id
-      WHERE o.code = $1
-    `, [code]);
+      WHERE o.code = $1 AND o.local_id = $2
+    `, [code, req.local.id]);
     if (result.rows.length === 0) return res.status(404).json({ error: 'Pedido no encontrado' });
     res.json(result.rows[0]);
   } catch (err) {
@@ -299,8 +296,8 @@ router.get('/code/:code', async (req, res) => {
 });
 
 // ------------------------------------------------------------
-// PUT /api/orders/:id/status - avanzar estado del pedido (SOLO ADMIN)
-router.put('/:id/status', requireAdminAuth, async (req, res) => {
+// PUT /api/admin/orders/:id/status - avanzar estado del pedido (SOLO ADMIN, de su local)
+router.put('/admin/orders/:id/status', requireAdminAuth, async (req, res) => {
   const { id } = req.params;
   const { status } = req.body;
   const validStatuses = ['recibido', 'preparando', 'listo', 'entregado', 'cancelado'];
@@ -309,8 +306,8 @@ router.put('/:id/status', requireAdminAuth, async (req, res) => {
   }
   try {
     const result = await pool.query(
-      'UPDATE orders SET status = $1 WHERE id = $2 RETURNING *',
-      [status, id]
+      'UPDATE orders SET status = $1 WHERE id = $2 AND local_id = $3 RETURNING *',
+      [status, id, req.admin.local_id]
     );
     if (result.rows.length === 0) return res.status(404).json({ error: 'Pedido no encontrado' });
     res.json(result.rows[0]);
@@ -321,10 +318,10 @@ router.put('/:id/status', requireAdminAuth, async (req, res) => {
 });
 
 // ------------------------------------------------------------
-// GET /api/orders/saturation - nivel de ocupacion general de la cocina
-router.get('/saturation', async (req, res) => {
+// GET /api/admin/orders/saturation - ocupacion de cocina del local del admin
+router.get('/admin/orders/saturation', requireAdminAuth, async (req, res) => {
   try {
-    const result = await pool.query('SELECT max_capacity, used_capacity FROM time_slots');
+    const result = await pool.query('SELECT max_capacity, used_capacity FROM time_slots WHERE local_id = $1', [req.admin.local_id]);
     const totalMax = result.rows.reduce((s, r) => s + r.max_capacity, 0);
     const totalUsed = result.rows.reduce((s, r) => s + r.used_capacity, 0);
     const occupancyPct = totalMax > 0 ? Math.round((totalUsed / totalMax) * 100) : 0;

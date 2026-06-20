@@ -3,13 +3,19 @@ const express = require('express');
 const router = express.Router();
 const pool = require('../db/pool');
 const { requireAdminAuth } = require('../middleware/auth');
+const { resolveLocal } = require('../middleware/resolveLocal');
 
 const CAT_EMOJIS = { burgers: '🍔', combos: '🍱', bebidas: '🥤', extras: '🍟', postres: '🍦' };
 
-// GET /api/products - lista todos los productos (publico: el cliente lo necesita para ver el menu)
-router.get('/', async (req, res) => {
+// ------------------------------------------------------------
+// RUTAS PUBLICAS (cliente), identificadas por slug en la URL
+// GET /api/:slug/products - lista productos de ESE local
+router.get('/:slug/products', resolveLocal, async (req, res) => {
   try {
-    const result = await pool.query('SELECT * FROM products ORDER BY id ASC');
+    const result = await pool.query(
+      'SELECT * FROM products WHERE local_id = $1 ORDER BY id ASC',
+      [req.local.id]
+    );
     res.json(result.rows);
   } catch (err) {
     console.error(err);
@@ -17,8 +23,25 @@ router.get('/', async (req, res) => {
   }
 });
 
-// POST /api/products - crear producto nuevo (SOLO ADMIN)
-router.post('/', requireAdminAuth, async (req, res) => {
+// ------------------------------------------------------------
+// RUTAS DE ADMIN, el local_id viene del token (no del request) para
+// que un admin nunca pueda tocar datos de otro local cambiando un parametro.
+// GET /api/admin/products - lista productos del local del admin logueado
+router.get('/admin/products', requireAdminAuth, async (req, res) => {
+  try {
+    const result = await pool.query(
+      'SELECT * FROM products WHERE local_id = $1 ORDER BY id ASC',
+      [req.admin.local_id]
+    );
+    res.json(result.rows);
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'Error al obtener productos' });
+  }
+});
+
+// POST /api/admin/products - crear producto nuevo (SOLO ADMIN, en su local)
+router.post('/admin/products', requireAdminAuth, async (req, res) => {
   const { name, description, price, category, available, image_url, stock, stock_min } = req.body;
   if (!name || !price) {
     return res.status(400).json({ error: 'Nombre y precio son obligatorios' });
@@ -26,9 +49,9 @@ router.post('/', requireAdminAuth, async (req, res) => {
   const emoji = CAT_EMOJIS[category] || '🍔';
   try {
     const result = await pool.query(
-      `INSERT INTO products (name, description, price, category, available, image_url, emoji, stock, stock_min)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9) RETURNING *`,
-      [name, description || '', price, category || 'burgers', available !== false, image_url || '', emoji, stock || 0, stock_min || 3]
+      `INSERT INTO products (local_id, name, description, price, category, available, image_url, emoji, stock, stock_min)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10) RETURNING *`,
+      [req.admin.local_id, name, description || '', price, category || 'burgers', available !== false, image_url || '', emoji, stock || 0, stock_min || 3]
     );
     res.status(201).json(result.rows[0]);
   } catch (err) {
@@ -37,8 +60,8 @@ router.post('/', requireAdminAuth, async (req, res) => {
   }
 });
 
-// PUT /api/products/:id - editar producto existente (SOLO ADMIN)
-router.put('/:id', requireAdminAuth, async (req, res) => {
+// PUT /api/admin/products/:id - editar producto (SOLO ADMIN, solo si es de su local)
+router.put('/admin/products/:id', requireAdminAuth, async (req, res) => {
   const { id } = req.params;
   const { name, description, price, category, available, image_url, stock, stock_min } = req.body;
   try {
@@ -52,8 +75,8 @@ router.put('/:id', requireAdminAuth, async (req, res) => {
          image_url = COALESCE($6, image_url),
          stock = COALESCE($7, stock),
          stock_min = COALESCE($8, stock_min)
-       WHERE id = $9 RETURNING *`,
-      [name, description, price, category, available, image_url, stock, stock_min, id]
+       WHERE id = $9 AND local_id = $10 RETURNING *`,
+      [name, description, price, category, available, image_url, stock, stock_min, id, req.admin.local_id]
     );
     if (result.rows.length === 0) return res.status(404).json({ error: 'Producto no encontrado' });
     res.json(result.rows[0]);
@@ -63,11 +86,14 @@ router.put('/:id', requireAdminAuth, async (req, res) => {
   }
 });
 
-// DELETE /api/products/:id (SOLO ADMIN)
-router.delete('/:id', requireAdminAuth, async (req, res) => {
+// DELETE /api/admin/products/:id (SOLO ADMIN, solo si es de su local)
+router.delete('/admin/products/:id', requireAdminAuth, async (req, res) => {
   const { id } = req.params;
   try {
-    const result = await pool.query('DELETE FROM products WHERE id = $1 RETURNING id', [id]);
+    const result = await pool.query(
+      'DELETE FROM products WHERE id = $1 AND local_id = $2 RETURNING id',
+      [id, req.admin.local_id]
+    );
     if (result.rows.length === 0) return res.status(404).json({ error: 'Producto no encontrado' });
     res.json({ deleted: true, id: result.rows[0].id });
   } catch (err) {

@@ -1,30 +1,42 @@
 -- ============================================================
--- ESQUEMA DE BASE DE DATOS - OrderFlow
+-- ESQUEMA DE BASE DE DATOS - OrderFlow (multi-local)
 -- ============================================================
--- Cada tabla corresponde a una parte de lo que antes vivia en
--- el objeto STATE de localStorage. Ahora es una sola copia
--- compartida por todos los que usan la app.
+-- A partir de esta version, la base de datos soporta varios locales
+-- (hamburgueserias) en la misma instalacion. Cada local se identifica
+-- por un "slug" en la URL (ej: tuapp.com/labrasita) y todos sus datos
+-- (productos, franjas, pedidos, admins, etc) quedan separados por
+-- local_id, sin mezclarse entre negocios.
 
--- Configuracion general del local (un solo registro, fila id=1)
-CREATE TABLE IF NOT EXISTS store_settings (
-  id INTEGER PRIMARY KEY DEFAULT 1,
+-- Tabla central: cada fila es un negocio/cliente de la plataforma.
+CREATE TABLE IF NOT EXISTS locales (
+  id SERIAL PRIMARY KEY,
+  slug TEXT UNIQUE NOT NULL,          -- identificador en la URL, ej: 'labrasita'
+  nombre TEXT NOT NULL,               -- nombre comercial, ej: 'La Brasita Burger'
   store_open BOOLEAN NOT NULL DEFAULT true,
   points_rate INTEGER NOT NULL DEFAULT 100, -- pesos necesarios para sumar 1 punto
-  local_name TEXT NOT NULL DEFAULT 'La Brasita Burger',
-  CONSTRAINT single_row CHECK (id = 1)
+  -- Datos de Mercado Pago de ESTE local (no de la plataforma). Se completan
+  -- cuando el dueño conecta su cuenta. Mientras esten vacios, el pago con MP
+  -- no esta disponible para ese local y se ofrecen los otros medios.
+  mp_access_token TEXT DEFAULT NULL,
+  mp_user_id TEXT DEFAULT NULL,
+  created_at TIMESTAMP DEFAULT now()
 );
 
--- Canales de venta (web, presencial, rappi, pedidosya)
+-- Canales de venta (web, presencial, rappi, pedidosya) — uno por local
 CREATE TABLE IF NOT EXISTS channels (
-  key TEXT PRIMARY KEY,             -- 'web' | 'presencial' | 'rappi' | 'pedidosya'
+  id SERIAL PRIMARY KEY,
+  local_id INTEGER NOT NULL REFERENCES locales(id) ON DELETE CASCADE,
+  key TEXT NOT NULL,                 -- 'web' | 'presencial' | 'rappi' | 'pedidosya'
   name TEXT NOT NULL,
   active BOOLEAN NOT NULL DEFAULT true,
-  last_sync TIMESTAMP DEFAULT now()
+  last_sync TIMESTAMP DEFAULT now(),
+  UNIQUE(local_id, key)
 );
 
--- Productos del menu
+-- Productos del menu — cada producto pertenece a un local
 CREATE TABLE IF NOT EXISTS products (
   id SERIAL PRIMARY KEY,
+  local_id INTEGER NOT NULL REFERENCES locales(id) ON DELETE CASCADE,
   name TEXT NOT NULL,
   description TEXT DEFAULT '',
   price INTEGER NOT NULL,            -- en pesos argentinos, sin decimales
@@ -37,9 +49,10 @@ CREATE TABLE IF NOT EXISTS products (
   created_at TIMESTAMP DEFAULT now()
 );
 
--- Franjas horarias
+-- Franjas horarias — propias de cada local
 CREATE TABLE IF NOT EXISTS time_slots (
   id SERIAL PRIMARY KEY,
+  local_id INTEGER NOT NULL REFERENCES locales(id) ON DELETE CASCADE,
   start_time TEXT NOT NULL,          -- formato 'HH:MM'
   end_time TEXT NOT NULL,
   max_capacity INTEGER NOT NULL DEFAULT 8,
@@ -50,6 +63,7 @@ CREATE TABLE IF NOT EXISTS time_slots (
 -- Promociones (descuentos en franjas de baja demanda)
 CREATE TABLE IF NOT EXISTS promotions (
   id SERIAL PRIMARY KEY,
+  local_id INTEGER NOT NULL REFERENCES locales(id) ON DELETE CASCADE,
   name TEXT NOT NULL,
   slot_id INTEGER REFERENCES time_slots(id) ON DELETE CASCADE,
   promo_type TEXT NOT NULL,          -- 'pct' | 'dblpts' | 'drink' | 'ship'
@@ -58,29 +72,36 @@ CREATE TABLE IF NOT EXISTS promotions (
   times_used INTEGER NOT NULL DEFAULT 0
 );
 
--- Premios canjeables con puntos
+-- Premios canjeables con puntos — propios de cada local
 CREATE TABLE IF NOT EXISTS rewards (
   id SERIAL PRIMARY KEY,
+  local_id INTEGER NOT NULL REFERENCES locales(id) ON DELETE CASCADE,
   name TEXT NOT NULL,
   emoji TEXT DEFAULT '🎁',
   points_cost INTEGER NOT NULL
 );
 
--- Clientes (simplificado: identificados por nombre + telefono opcional)
+-- Clientes: identificados por TELEFONO, unico dentro de cada local.
+-- El mismo telefono puede existir en distintos locales como clientes
+-- distintos (sus puntos no se mezclan entre negocios).
 CREATE TABLE IF NOT EXISTS customers (
   id SERIAL PRIMARY KEY,
+  local_id INTEGER NOT NULL REFERENCES locales(id) ON DELETE CASCADE,
   name TEXT NOT NULL,
-  phone TEXT DEFAULT '',
+  phone TEXT NOT NULL,
   points INTEGER NOT NULL DEFAULT 0,
-  created_at TIMESTAMP DEFAULT now()
+  created_at TIMESTAMP DEFAULT now(),
+  UNIQUE(local_id, phone)
 );
 
 -- Pedidos
 CREATE TABLE IF NOT EXISTS orders (
   id SERIAL PRIMARY KEY,
-  code TEXT UNIQUE NOT NULL,         -- ej. 'BRG-104'
+  local_id INTEGER NOT NULL REFERENCES locales(id) ON DELETE CASCADE,
+  code TEXT NOT NULL,                -- ej. 'BRG-104' (unico DENTRO del local, no global)
   customer_id INTEGER REFERENCES customers(id) ON DELETE SET NULL,
   customer_name TEXT NOT NULL,       -- copia del nombre por si el cliente se borra
+  customer_phone TEXT DEFAULT '',
   channel TEXT NOT NULL,             -- 'web' | 'presencial' | 'rappi' | 'pedidosya'
   slot_id INTEGER REFERENCES time_slots(id) ON DELETE SET NULL,
   raw_total INTEGER NOT NULL,
@@ -93,7 +114,8 @@ CREATE TABLE IF NOT EXISTS orders (
   is_delivery BOOLEAN NOT NULL DEFAULT false,
   eta TEXT DEFAULT '',
   points_earned INTEGER NOT NULL DEFAULT 0,
-  created_at TIMESTAMP DEFAULT now()
+  created_at TIMESTAMP DEFAULT now(),
+  UNIQUE(local_id, code)
 );
 
 -- Items de cada pedido (relacion N:1 con orders)
@@ -106,44 +128,19 @@ CREATE TABLE IF NOT EXISTS order_items (
   unit_price INTEGER NOT NULL
 );
 
--- Metricas operativas acumuladas (contadores simples)
+-- Metricas operativas acumuladas (contadores simples) — una fila por local
 CREATE TABLE IF NOT EXISTS operational_metrics (
-  id INTEGER PRIMARY KEY DEFAULT 1,
+  local_id INTEGER PRIMARY KEY REFERENCES locales(id) ON DELETE CASCADE,
   rejected_by_capacity INTEGER NOT NULL DEFAULT 0,
-  reassigned_count INTEGER NOT NULL DEFAULT 0,
-  CONSTRAINT single_row_metrics CHECK (id = 1)
+  reassigned_count INTEGER NOT NULL DEFAULT 0
 );
 
--- Usuarios administradores (login del panel privado)
+-- Usuarios administradores: cada admin pertenece a UN local.
+-- Todas sus acciones quedan limitadas a ese local_id automaticamente.
 CREATE TABLE IF NOT EXISTS admin_users (
   id SERIAL PRIMARY KEY,
+  local_id INTEGER NOT NULL REFERENCES locales(id) ON DELETE CASCADE,
   username TEXT UNIQUE NOT NULL,
   password_hash TEXT NOT NULL,
   created_at TIMESTAMP DEFAULT now()
 );
-
--- store_settings y operational_metrics son tablas de una sola fila (id=1),
--- asi que es seguro insertarlas siempre con ON CONFLICT DO NOTHING: nunca
--- se duplican porque "id" es PRIMARY KEY.
-INSERT INTO store_settings (id, store_open, points_rate, local_name)
-VALUES (1, true, 100, 'La Brasita Burger')
-ON CONFLICT (id) DO NOTHING;
-
-INSERT INTO operational_metrics (id, rejected_by_capacity, reassigned_count)
-VALUES (1, 0, 0)
-ON CONFLICT (id) DO NOTHING;
-
--- "channels" tiene "key" como PRIMARY KEY, asi que tambien es seguro repetir.
-INSERT INTO channels (key, name, active, last_sync) VALUES
-  ('web', 'Web / QR', true, now()),
-  ('presencial', 'Presencial', true, now()),
-  ('rappi', 'Rappi', true, now()),
-  ('pedidosya', 'PedidosYa', true, now())
-ON CONFLICT (key) DO NOTHING;
-
--- IMPORTANTE: los datos de ejemplo de productos, franjas y premios NO estan
--- aca, porque esas tablas usan "id SERIAL" sin restriccion UNIQUE real, lo
--- que hace que "ON CONFLICT DO NOTHING" no detecte duplicados y los vuelva
--- a insertar cada vez que el servidor arranca. Ese seed vive en seed.sql y
--- el codigo (server.js) lo corre una sola vez, verificando primero si la
--- tabla esta vacia.

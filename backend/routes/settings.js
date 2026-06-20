@@ -3,11 +3,21 @@ const express = require('express');
 const router = express.Router();
 const pool = require('../db/pool');
 const { requireAdminAuth } = require('../middleware/auth');
+const { resolveLocal } = require('../middleware/resolveLocal');
 
-// GET /api/settings - configuracion general del local (publico: el cliente necesita saber si esta abierto)
-router.get('/', async (req, res) => {
+// GET /api/:slug/settings - configuracion publica del local (lo necesita el cliente)
+router.get('/:slug/settings', resolveLocal, async (req, res) => {
+  res.json({
+    store_open: req.local.store_open,
+    points_rate: req.local.points_rate,
+    local_name: req.local.nombre,
+  });
+});
+
+// GET /api/admin/settings - configuracion del local del admin logueado
+router.get('/admin/settings', requireAdminAuth, async (req, res) => {
   try {
-    const result = await pool.query('SELECT * FROM store_settings WHERE id = 1');
+    const result = await pool.query('SELECT * FROM locales WHERE id = $1', [req.admin.local_id]);
     res.json(result.rows[0]);
   } catch (err) {
     console.error(err);
@@ -15,16 +25,16 @@ router.get('/', async (req, res) => {
   }
 });
 
-// PUT /api/settings - actualizar (ej: abrir/cerrar el local) (SOLO ADMIN)
-router.put('/', requireAdminAuth, async (req, res) => {
-  const { store_open, local_name } = req.body;
+// PUT /api/admin/settings - actualizar (ej: abrir/cerrar el local) (SOLO ADMIN)
+router.put('/admin/settings', requireAdminAuth, async (req, res) => {
+  const { store_open, nombre } = req.body;
   try {
     const result = await pool.query(
-      `UPDATE store_settings SET
+      `UPDATE locales SET
          store_open = COALESCE($1, store_open),
-         local_name = COALESCE($2, local_name)
-       WHERE id = 1 RETURNING *`,
-      [store_open, local_name]
+         nombre = COALESCE($2, nombre)
+       WHERE id = $3 RETURNING *`,
+      [store_open, nombre, req.admin.local_id]
     );
     res.json(result.rows[0]);
   } catch (err) {
