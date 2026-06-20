@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1.0,maximum-scale=1.0">
-<title>OrderFlow v3</title>
+<title>OrderFlow</title>
 <script src="https://cdn.jsdelivr.net/npm/qrcodejs@1.0.0/qrcode.min.js"></script>
 <style>
 
@@ -514,20 +514,19 @@ let currentCustomerName='';
 // CARGA DE DATOS DESDE EL BACKEND
 // ============================================================
 async function refreshAll() {
-  const [settings, products, slots, channels, orders, promos, rewardsRes] = await Promise.all([
+  // El cliente solo necesita datos publicos: menu, franjas, promociones
+  // activas, configuracion del local y premios canjeables. Las rutas de
+  // canales, pedidos completos y demas son exclusivas del panel admin.
+  const [settings, products, slots, promos, rewardsRes] = await Promise.all([
     apiGet('/settings'),
     apiGet('/products'),
     apiGet('/slots'),
-    apiGet('/channels'),
-    apiGet('/orders'),
     apiGet('/promotions'),
     apiGet('/points/rewards'),
   ]);
   DATA.settings = settings;
   DATA.products = products;
   DATA.slots = slots;
-  DATA.channels = channels;
-  DATA.orders = orders;
   DATA.promos = promos;
   DATA.rewards = rewardsRes;
 }
@@ -759,9 +758,8 @@ async function goC(id){
   if(id==='cs-form')renderFormSum();
   if(id==='cs-status'&&currentOrderCode){
     try{
-      await refreshAll();
-      const o=DATA.orders.find(x=>x.code===currentOrderCode);
-      if(o)renderTracker(o.status);
+      const o = await apiGet('/orders/code/' + encodeURIComponent(currentOrderCode));
+      renderTracker(o.status);
     }catch(e){/* si falla, se queda con el ultimo estado conocido */}
   }
 }
